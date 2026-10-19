@@ -177,10 +177,10 @@ export default function TripLeafletMap({
   }, [orderedValidStops.length]);
 
   return (
-    <div className="cute-card relative h-full w-full overflow-hidden p-2">
+    <div className="cute-card relative z-10 h-full w-full overflow-hidden p-2">
       <div
         ref={containerRef}
-        className="h-[340px] w-full overflow-hidden rounded-2xl border-2 border-[var(--color-border-subtle)] sm:h-[440px] lg:h-[510px]"
+        className="h-[300px] w-full overflow-hidden rounded-2xl border-2 border-[var(--color-border-subtle)]"
         role="region"
         aria-label={t.detail.mapHeading}
       />

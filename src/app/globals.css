@@ -496,3 +496,15 @@ textarea:required:user-valid {
   box-shadow: 0 0 0 6px rgba(244, 189, 66, 0.42), 0 8px 18px rgba(9, 124, 135, 0.45);
   z-index: 1000 !important;
 }
+
+/* Ensure Leaflet controls and pane z-indexes stay below sticky navbar */
+.leaflet-container {
+  z-index: 10 !important;
+}
+.leaflet-pane {
+  z-index: 10 !important;
+}
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 20 !important;
+}

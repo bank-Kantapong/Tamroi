@@ -30,7 +30,7 @@ import { TripStopListItem } from "./TripStopListItem";
 const TripLeafletMap = dynamic(() => import("./TripLeafletMap"), {
   ssr: false,
   loading: () => (
-    <div className="cute-card flex h-[340px] w-full animate-pulse items-center justify-center bg-[var(--color-bg-soft)] text-sm font-extrabold text-[var(--color-brand-primary)] sm:h-[440px] lg:h-[510px]">
+    <div className="cute-card flex h-[300px] w-full animate-pulse items-center justify-center bg-[var(--color-bg-soft)] text-sm font-extrabold text-[var(--color-brand-primary)]">
       กำลังโหลดแผนที่เส้นทาง (Loading interactive map)...
     </div>
   ),
@@ -210,83 +210,89 @@ export function TripDetailView({
           </p>
         </div>
       ) : (
-        /* Interactive Map + Selected Stop Inspector + Ordered Stop List */
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:mt-8 lg:grid-cols-12">
-          {/* Left/Top on mobile: Map & Active Stop Detail Inspector */}
-          <div className="space-y-6 lg:col-span-7">
-            <section aria-labelledby="map-section-heading">
-              <div className="mb-3 flex items-center justify-between">
-                <h2
-                  id="map-section-heading"
-                  className="font-heading text-lg font-black text-[var(--color-brand-deep)]"
-                >
-                  {t.detail.mapHeading}
-                </h2>
-                <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--color-border-alt)] bg-[var(--color-bg-soft)] px-3 py-1 text-xs font-extrabold text-[var(--color-brand-primary)]">
-                  <Sparkles className="h-3 w-3 text-[var(--color-brand-cyan)]" aria-hidden="true" />
-                  {t.detail.mapSubheading(orderedStops.length)}
-                </span>
-              </div>
-              <TripLeafletMap
-                stops={orderedStops}
-                selectedStopId={selectedStop?.id ?? null}
-                onSelectStop={(id) => selectStop(id, true)}
-              />
-            </section>
-
-            {/* Selected Stop Detail Inspector Subcomponent */}
-            {selectedStop && (
-              <TripStopInspector
-                selectedStop={selectedStop}
-                orderedStops={orderedStops}
-                travelMode={trip.travel_mode}
-                failedStopImages={failedStopImages}
-                onImageError={markStopImageFailed}
-                onSelectStop={(id) => selectStop(id, true)}
-                onCopyCoordinates={handleCopyCoordinates}
-                copiedStopId={copiedStopId}
-                copyErrorStopId={copyErrorStopId}
-                t={t}
-              />
-            )}
-          </div>
-
-          {/* Right/Bottom on mobile: Ordered Itinerary Stop List */}
-          <section
-            aria-labelledby="itinerary-list-heading"
-            className="lg:col-span-5"
-          >
+        /* New Layout: 
+           Row 1: Interactive Map (Full Width)
+           Row 2: Selected Stop Inspector (Left) + Ordered Stop List (Right)
+        */
+        <div className="mt-6 space-y-8 lg:mt-8">
+          {/* Row 1: Interactive Map (Full Width 1 Row) */}
+          <section aria-labelledby="map-section-heading" className="w-full">
             <div className="mb-3 flex items-center justify-between">
               <h2
-                id="itinerary-list-heading"
+                id="map-section-heading"
                 className="font-heading text-lg font-black text-[var(--color-brand-deep)]"
               >
-                {t.detail.itineraryHeading}
+                {t.detail.mapHeading}
               </h2>
-              <span className="rounded-full bg-[var(--color-bg-card-photo)] px-3 py-0.5 text-xs font-bold text-[var(--color-brand-primary)]">
-                {t.detail.itineraryHint}
+              <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--color-border-alt)] bg-[var(--color-bg-soft)] px-3 py-1 text-xs font-extrabold text-[var(--color-brand-primary)]">
+                <Sparkles className="h-3 w-3 text-[var(--color-brand-cyan)]" aria-hidden="true" />
+                {t.detail.mapSubheading(orderedStops.length)}
               </span>
             </div>
+            <TripLeafletMap
+              stops={orderedStops}
+              selectedStopId={selectedStop?.id ?? null}
+              onSelectStop={(id) => selectStop(id, true)}
+            />
+          </section>
 
-            <ol className="space-y-3.5" aria-label={t.detail.itineraryHeading}>
-              {orderedStops.map((stop, idx) => (
-                <TripStopListItem
-                  key={stop.id}
-                  stop={stop}
-                  index={idx}
-                  isSelected={selectedStop?.id === stop.id}
-                  isCopied={copiedStopId === stop.id}
-                  badgeColorClass={
-                    STOP_NUMBER_COLORS[idx % STOP_NUMBER_COLORS.length]
-                  }
+          {/* Row 2: Selected Stop Inspector (Left) + Ordered Stop List (Right) */}
+          <div className="grid grid-cols-1 items-start gap-6 border-t-2 border-dashed border-[var(--color-border-subtle)] pt-7 sm:gap-8 lg:grid-cols-12 lg:pt-8">
+            {/* Left: Selected Stop Inspector */}
+            <div className="lg:col-span-7">
+              {selectedStop && (
+                <TripStopInspector
+                  selectedStop={selectedStop}
+                  orderedStops={orderedStops}
                   travelMode={trip.travel_mode}
-                  onSelectStop={selectStop}
+                  failedStopImages={failedStopImages}
+                  onImageError={markStopImageFailed}
+                  onSelectStop={(id) => selectStop(id, true)}
                   onCopyCoordinates={handleCopyCoordinates}
+                  copiedStopId={copiedStopId}
+                  copyErrorStopId={copyErrorStopId}
                   t={t}
                 />
-              ))}
-            </ol>
-          </section>
+              )}
+            </div>
+
+            {/* Right: Ordered Itinerary Stop List */}
+            <section
+              aria-labelledby="itinerary-list-heading"
+              className="lg:col-span-5"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h2
+                  id="itinerary-list-heading"
+                  className="font-heading text-lg font-black text-[var(--color-brand-deep)]"
+                >
+                  {t.detail.itineraryHeading}
+                </h2>
+                <span className="rounded-full bg-[var(--color-bg-card-photo)] px-3 py-0.5 text-xs font-bold text-[var(--color-brand-primary)]">
+                  {t.detail.itineraryHint}
+                </span>
+              </div>
+
+              <ol className="space-y-3.5" aria-label={t.detail.itineraryHeading}>
+                {orderedStops.map((stop, idx) => (
+                  <TripStopListItem
+                    key={stop.id}
+                    stop={stop}
+                    index={idx}
+                    isSelected={selectedStop?.id === stop.id}
+                    isCopied={copiedStopId === stop.id}
+                    badgeColorClass={
+                      STOP_NUMBER_COLORS[idx % STOP_NUMBER_COLORS.length]
+                    }
+                    travelMode={trip.travel_mode}
+                    onSelectStop={selectStop}
+                    onCopyCoordinates={handleCopyCoordinates}
+                    t={t}
+                  />
+                ))}
+              </ol>
+            </section>
+          </div>
         </div>
       )}
     </div>
