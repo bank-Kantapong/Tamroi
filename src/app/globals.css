@@ -1,0 +1,498 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "leaflet/dist/leaflet.css";
+
+/* Modern Web Guidance (`motion`): Register --animation-reduced custom property
+   so reduced-motion preferences are respected cleanly without 0.01ms hacks */
+@property --animation-reduced {
+  syntax: "*";
+  inherits: false;
+  initial-value: none;
+}
+
+/* Design Tokens (CSS Variables) — Cute Tropical Scrapbook Palette */
+:root {
+  /* Brand / Primary Teal */
+  --color-brand-primary: #097C87;
+  --color-brand-primary-hover: #07626B;
+  --color-brand-deep: #073B40;
+  --color-brand-teal-light: #158492;
+  --color-brand-teal-dark: #0D6973;
+  --color-brand-teal-darkest: #065A62;
+  --color-brand-cyan: #19B5C4;
+  --color-brand-tag: #0E6B75;
+  --color-brand-tag-bg: #E1F3F6;
+
+  /* Accent Aqua & Border Pastel */
+  --color-accent-aqua: #23CED9;
+  --color-border-subtle: #BCE8EC;
+  --color-border-card: #BCE8EC;
+  --color-border-alt: #B3E5EC;
+  --color-bg-page: #F5FBFB;
+  --color-bg-soft: #F2FBFD;
+  --color-bg-aqua-light: #EEF9FB;
+  --color-bg-card-photo: #E8F8FA;
+  --color-bg-aqua-fade: #D5F2F6;
+
+  /* Golden Sunshine / Yellow Tokens */
+  --color-sun-yellow: #F4BD42;
+  --color-sun-yellow-light: #FFE082;
+  --color-sun-yellow-bright: #FFE066;
+  --color-sun-cream: #FFF8DF;
+  --color-sun-lightest: #FFF4C8;
+  --color-sun-text: #4A3200;
+  --color-sun-text-dark: #2C1E00;
+  --color-sun-amber: #D97706;
+
+  /* Green Mint / Sage / Pastel Tokens */
+  --color-mint-border: #C6E9D0;
+  --color-mint-border-alt: #BDE2C5;
+  --color-mint-bg: #F1FAF4;
+  --color-mint-bg-alt: #F4FBF5;
+  --color-mint-text: #378354;
+  --color-mint-text-dark: #2A7B4C;
+  --color-mint-icon: #4DA66E;
+  --color-sage: #A1CCA6;
+  --color-sage-dark: #65B883;
+
+  /* Amber Pastel Tokens */
+  --color-amber-border: #FBE39E;
+  --color-amber-bg: #FFFBEB;
+  --color-amber-text: #B27D12;
+  --color-amber-icon: #F2B830;
+
+  /* Coral / Peach Pastel Tokens */
+  --color-coral-border: #FAD1C8;
+  --color-coral-border-alt: #F9C6B8;
+  --color-coral-bg: #FFF3F1;
+  --color-coral-bg-alt: #FFF6F3;
+  --color-coral-text: #C25443;
+  --color-coral-text-dark: #D95B43;
+  --color-coral-icon: #EB7A68;
+  --color-coral-accent: #F47B6B;
+  --color-peach: #FCA47C;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-family: var(--font-ibm-thai), var(--font-prompt), system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, button, .font-heading {
+    font-family: var(--font-prompt), var(--font-ibm-thai), system-ui, sans-serif;
+  }
+
+  body {
+    background-color: var(--color-bg-page);
+    color: var(--color-brand-deep);
+    @apply antialiased selection:bg-[#23CED9]/30 selection:text-[#097C87];
+    background-image:
+      radial-gradient(circle at 18px 18px, rgba(9, 124, 135, 0.065) 1.5px, transparent 0),
+      radial-gradient(at 0% 0%, rgba(35, 206, 217, 0.14) 0px, transparent 48%),
+      radial-gradient(at 100% 10%, rgba(252, 164, 124, 0.16) 0px, transparent 48%),
+      radial-gradient(at 50% 100%, rgba(249, 215, 121, 0.16) 0px, transparent 52%);
+    background-size: 32px 32px, 100% 100%, 100% 100%, 100% 100%;
+    background-attachment: fixed;
+  }
+
+  :focus-visible {
+    outline-color: var(--color-brand-primary);
+    @apply outline-2 outline-offset-2;
+  }
+}
+
+/* Cute Playful Scrapbook UI Utilities */
+.cute-card {
+  background-color: #ffffff;
+  border: 2.5px solid var(--color-border-card);
+  border-radius: 1.75rem;
+  box-shadow: 0 8px 0 rgba(9, 124, 135, 0.09), 0 14px 28px -6px rgba(9, 124, 135, 0.1);
+}
+
+.cute-page-container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 80rem; /* 1280px (max-w-7xl) */
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  .cute-page-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .cute-page-container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.cute-pill-shadow {
+  box-shadow: 0 4px 0 rgba(9, 124, 135, 0.15);
+}
+
+.cute-yellow-btn {
+  background: linear-gradient(135deg, var(--color-sun-yellow-light), var(--color-sun-yellow));
+  color: var(--color-sun-text);
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 0 rgba(180, 120, 10, 0.28), 0 8px 16px rgba(244, 189, 66, 0.25);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease;
+}
+
+.cute-yellow-btn:hover {
+  transform: translate3d(0, -2px, 0);
+  box-shadow: 0 6px 0 rgba(180, 120, 10, 0.32), 0 12px 20px rgba(244, 189, 66, 0.35);
+}
+
+.cute-yellow-btn:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+.cute-aqua-btn {
+  background: linear-gradient(135deg, var(--color-brand-primary), #19B5C4);
+  color: #ffffff;
+  border: 2px solid #E2F8FA;
+  box-shadow: 0 4px 0 rgba(6, 75, 82, 0.32), 0 8px 16px rgba(9, 124, 135, 0.22);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease;
+}
+
+.cute-aqua-btn:hover {
+  transform: translate3d(0, -2px, 0);
+  box-shadow: 0 6px 0 rgba(6, 75, 82, 0.36), 0 12px 22px rgba(9, 124, 135, 0.3);
+}
+
+.cute-aqua-btn:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+/* Scrapbook Header & Stat Box Token Utility Classes */
+.scrapbook-header-card {
+  border-radius: 2.25rem;
+  border-width: 2px;
+  border-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 1rem;
+  box-shadow: 0 14px 38px rgba(9, 124, 135, 0.1);
+  backdrop-filter: blur(12px);
+}
+@media (min-width: 640px) {
+  .scrapbook-header-card {
+    padding: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .scrapbook-header-card {
+    padding: 1.75rem;
+  }
+}
+
+.scrapbook-photo-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 2rem;
+  border-width: 4px;
+  border-color: #ffffff;
+  background-color: var(--color-bg-card-photo);
+  box-shadow: 0 10px 28px rgba(7, 59, 64, 0.16);
+}
+
+.stat-card-duration {
+  border-radius: 1rem;
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-aqua-light);
+  padding: 0.875rem;
+}
+
+.stat-card-budget {
+  border-radius: 1rem;
+  border: 1px solid var(--color-mint-border);
+  background-color: var(--color-mint-bg);
+  padding: 0.875rem;
+}
+
+.stat-card-stops {
+  border-radius: 1rem;
+  border: 1px solid var(--color-amber-border);
+  background-color: var(--color-amber-bg);
+  padding: 0.875rem;
+}
+
+.stat-card-cost {
+  border-radius: 1rem;
+  border: 1px solid var(--color-coral-border);
+  background-color: var(--color-coral-bg);
+  padding: 0.875rem;
+}
+
+.action-box-maps {
+  border-radius: 1rem;
+  border: 1px solid var(--color-border-subtle);
+  background-color: #EAF7FA;
+  padding: 1rem;
+}
+@media (min-width: 640px) {
+  .action-box-maps {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+}
+
+.btn-open-maps-gold {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid #E0AC26;
+  background: linear-gradient(to bottom, #FFE27A, #F7C53E);
+  padding: 0.625rem 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: var(--color-sun-text-dark);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-open-maps-gold:hover {
+  transform: scale(1.02);
+  filter: brightness(1.05);
+}
+@media (min-width: 640px) {
+  .btn-open-maps-gold {
+    font-size: 0.875rem;
+  }
+}
+
+.scrapbook-stop-thumb-btn {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 2px solid #ffffff;
+  background-color: #ffffff;
+  padding: 0.625rem;
+  text-align: left;
+  box-shadow: 0 8px 22px rgba(7, 59, 64, 0.09);
+  transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.scrapbook-stop-thumb-btn:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(9, 124, 135, 0.16);
+  border-color: var(--color-border-subtle);
+}
+@media (min-width: 640px) {
+  .scrapbook-stop-thumb-btn {
+    width: 235px;
+  }
+}
+@media (min-width: 768px) {
+  .scrapbook-stop-thumb-btn {
+    width: 245px;
+  }
+}
+
+/* Modern Web Guidance (`branded-select-styling`): Progressive enhancement for native <select> */
+@supports (appearance: base-select) {
+  .brand-select,
+  .brand-select::picker(select) {
+    appearance: base-select;
+  }
+
+  .brand-select::picker(select) {
+    background-color: #ffffff;
+    border: 2px solid #BCE8EC;
+    border-radius: 1.25rem;
+    padding: 0.45rem;
+    box-shadow: 0 10px 0 rgba(9, 124, 135, 0.1), 0 16px 32px rgba(9, 124, 135, 0.18);
+  }
+
+  .brand-select::picker-icon {
+    color: #097C87;
+  }
+
+  .brand-select option {
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.75rem;
+    color: #073b40;
+    cursor: pointer;
+  }
+
+  .brand-select option:hover {
+    background-color: rgba(35, 206, 217, 0.16);
+  }
+
+  .brand-select option::checkmark {
+    color: #097C87;
+  }
+}
+
+/* Compositor-only keyframes (opacity + transform/translate/scale) */
+@keyframes tamroiFadeUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes tamroiMenuPop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes tamroiFloatGlow {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(10px, -12px, 0) scale(1.06);
+  }
+}
+
+@keyframes tamroiWiggle {
+  0%, 100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes tamroiPinPulse {
+  0%, 100% {
+    transform: scale(1.12);
+  }
+  50% {
+    transform: scale(1.22);
+  }
+}
+
+.animate-fade-up {
+  animation: tamroiFadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animation-reduced: none;
+}
+
+.animate-menu-pop {
+  animation: tamroiMenuPop 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animation-reduced: none;
+}
+
+.animate-float-slow {
+  animation: tamroiFloatGlow 7s ease-in-out infinite;
+  --animation-reduced: none;
+}
+
+.animate-wiggle-slow {
+  animation: tamroiWiggle 4.5s ease-in-out infinite;
+  --animation-reduced: none;
+}
+
+.card-interactive {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease;
+}
+
+.card-interactive:hover {
+  transform: translate3d(0, -6px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: var(--animation-reduced) !important;
+  }
+  .card-interactive:hover,
+  .cute-yellow-btn:hover,
+  .cute-aqua-btn:hover {
+    transform: none;
+  }
+}
+
+/* Modern Web Guidance: required-field-feedback (:user-invalid + fallback) */
+.field-error-msg {
+  display: none;
+  color: #d93025;
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+  font-weight: 600;
+}
+
+input:user-invalid,
+textarea:user-invalid,
+select:user-invalid,
+input.user-invalid-fallback,
+textarea.user-invalid-fallback,
+select.user-invalid-fallback {
+  border-color: #d93025 !important;
+  background-color: #fce8e6 !important;
+}
+
+input:user-invalid + .field-error-msg,
+textarea:user-invalid + .field-error-msg,
+select:user-invalid + .field-error-msg,
+input.user-invalid-fallback + .field-error-msg,
+textarea.user-invalid-fallback + .field-error-msg,
+select.user-invalid-fallback + .field-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+input:required:user-valid,
+textarea:required:user-valid {
+  border-color: #097C87;
+}
+
+/* Custom numbered Leaflet itinerary markers — Cute Pastel Scrapbook theme */
+.tamroi-marker-wrapper {
+  background: transparent;
+  border: none;
+}
+
+.tamroi-stop-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #19B5C4, #097C87);
+  color: #ffffff;
+  font-family: var(--font-prompt), sans-serif;
+  font-weight: 800;
+  font-size: 0.92rem;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 0 rgba(6, 75, 82, 0.32), 0 6px 14px rgba(9, 124, 135, 0.38);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.tamroi-stop-pin--active {
+  width: 46px;
+  height: 46px;
+  background: linear-gradient(135deg, #F47B6B, #E05A47);
+  border: 3.5px solid #FFE082;
+  color: #ffffff;
+  font-size: 1.05rem;
+  animation: tamroiPinPulse 2s ease-in-out infinite;
+  --animation-reduced: none;
+  box-shadow: 0 0 0 6px rgba(244, 189, 66, 0.42), 0 8px 18px rgba(9, 124, 135, 0.45);
+  z-index: 1000 !important;
+}
