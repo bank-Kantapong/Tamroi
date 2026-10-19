@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import { TripListItem, TripFilterParams } from "@/types/trip";
 import { SearchFilterBar } from "@/components/SearchFilterBar";
@@ -8,12 +8,14 @@ import { TripCard } from "@/components/trip/TripCard";
 import { useLanguage } from "@/components/LanguageProvider";
 import { HomeHeroInfographic } from "./HomeHeroInfographic";
 import { CurvedUnderline } from "@/components/illustrations";
+import { useFilterStore } from "@/stores/useFilterStore";
 import {
   MapPin,
   Navigation,
   Compass,
   Info,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 
 interface HomeClientProps {
@@ -26,11 +28,25 @@ interface HomeClientProps {
 }
 
 export function HomeClient({
-  trips,
+  trips: initialTrips,
   metadata,
   filters,
 }: HomeClientProps) {
   const { locale, t } = useLanguage();
+
+  // Zustand filter store for dynamic trips & async loading
+  const { trips, isLoading, initFromParams } = useFilterStore();
+  const isFirstMount = useRef(true);
+
+  useEffect(() => {
+    if (isFirstMount.current) {
+      initFromParams(filters, initialTrips);
+      isFirstMount.current = false;
+    }
+  }, [filters, initialTrips, initFromParams]);
+
+  // Fallback to initialTrips if store is not yet initialized
+  const displayTrips = trips.length > 0 || !isFirstMount.current ? trips : initialTrips;
 
   return (
     <div className="space-y-8 pb-16">
@@ -143,7 +159,6 @@ export function HomeClient({
           provinces={metadata.provinces}
           categories={metadata.categories}
           currentFilters={filters}
-          totalCount={trips.length}
         />
 
         {/* Cute Sticky-Note Style Sample Disclosure Banner */}
@@ -169,61 +184,74 @@ export function HomeClient({
           </Link>
         </div>
 
-        {/* Trip Results Grid or Cute Empty State */}
-        {trips.length === 0 ? (
-          <div className="cute-card border-dashed p-12 text-center">
-            <div className="mx-auto flex h-16 w-16 -rotate-6 items-center justify-center rounded-3xl border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)] text-[var(--color-brand-primary)] shadow-sm">
-              <Compass className="h-8 w-8" aria-hidden="true" />
-            </div>
-            <h2 className="mt-4 font-heading text-xl font-extrabold text-[var(--color-brand-deep)]">
-              {t.search.emptyTitle}
-            </h2>
-            <p className="mx-auto mt-1.5 max-w-md text-sm font-medium text-slate-600">
-              {t.search.emptySubtitle}
-            </p>
-            <div className="mt-6">
-              <Link
-                href="/"
-                className="cute-yellow-btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-extrabold"
-              >
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                {t.search.showAllBtn}
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <section aria-label="Curated trips list">
-            {/* Cute Section Header with Pill Tag */}
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)] px-3 py-1 text-[11px] font-extrabold text-[var(--color-brand-primary)]">
-                  <Sparkles className="h-3 w-3 text-[var(--color-brand-cyan)]" aria-hidden="true" />
-                  <span>{locale === "th" ? "CURATED ROUTES ♡" : "CURATED ROUTES ♡"}</span>
-                </div>
-                <h2 className="mt-2 font-heading text-2xl font-black text-[var(--color-brand-deep)] sm:text-3xl">
-                  {locale === "th"
-                    ? "ทริปแนะนำพร้อมออกเดินทาง"
-                    : "Curated Ready-to-Follow Trips"}
-                </h2>
-                <p className="mt-0.5 text-xs font-medium text-slate-600 sm:text-sm">
-                  {locale === "th"
-                    ? "เลือกทริปที่ถูกใจเพื่อดูลำดับจุดแวะบนแผนที่และกดนำทางได้เลย"
-                    : "Select any itinerary to inspect ordered stops on the map and launch Google Maps"}
+        {/* Trip Results Area with Async Loading Overlay / Grid */}
+        <div className="relative min-h-[300px]">
+          {isLoading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-white/70 backdrop-blur-sm transition-all">
+              <div className="flex flex-col items-center gap-3 rounded-3xl border-2 border-[var(--color-border-subtle)] bg-white px-8 py-6 shadow-xl">
+                <Loader2 className="h-8 w-8 animate-spin text-[var(--color-brand-primary)]" />
+                <p className="font-heading text-sm font-black text-[var(--color-brand-deep)]">
+                  {locale === "th" ? "กำลังค้นหาเส้นทาง..." : "Searching routes..."}
                 </p>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-white bg-[var(--color-sun-yellow-light)] px-4 py-1.5 text-xs font-extrabold text-[var(--color-sun-text)] shadow-sm">
-                <MapPin className="h-3.5 w-3.5 text-[var(--color-sun-amber)]" aria-hidden="true" />
-                {t.search.showingPrefix} {trips.length} {t.search.showingUnit}
-              </span>
             </div>
+          )}
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {trips.map((trip, index) => (
-                <TripCard key={trip.id} trip={trip} index={index} />
-              ))}
+          {displayTrips.length === 0 ? (
+            <div className="cute-card border-dashed p-12 text-center">
+              <div className="mx-auto flex h-16 w-16 -rotate-6 items-center justify-center rounded-3xl border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)] text-[var(--color-brand-primary)] shadow-sm">
+                <Compass className="h-8 w-8" aria-hidden="true" />
+              </div>
+              <h2 className="mt-4 font-heading text-xl font-extrabold text-[var(--color-brand-deep)]">
+                {t.search.emptyTitle}
+              </h2>
+              <p className="mx-auto mt-1.5 max-w-md text-sm font-medium text-slate-600">
+                {t.search.emptySubtitle}
+              </p>
+              <div className="mt-6">
+                <Link
+                  href="/"
+                  className="cute-yellow-btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-extrabold"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  {t.search.showAllBtn}
+                </Link>
+              </div>
             </div>
-          </section>
-        )}
+          ) : (
+            <section aria-label="Curated trips list">
+              {/* Cute Section Header with Pill Tag */}
+              <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)] px-3 py-1 text-[11px] font-extrabold text-[var(--color-brand-primary)]">
+                    <Sparkles className="h-3 w-3 text-[var(--color-brand-cyan)]" aria-hidden="true" />
+                    <span>{locale === "th" ? "CURATED ROUTES ♡" : "CURATED ROUTES ♡"}</span>
+                  </div>
+                  <h2 className="mt-2 font-heading text-2xl font-black text-[var(--color-brand-deep)] sm:text-3xl">
+                    {locale === "th"
+                      ? "ทริปแนะนำพร้อมออกเดินทาง"
+                      : "Curated Ready-to-Follow Trips"}
+                  </h2>
+                  <p className="mt-0.5 text-xs font-medium text-slate-600 sm:text-sm">
+                    {locale === "th"
+                      ? "เลือกทริปที่ถูกใจเพื่อดูลำดับจุดแวะบนแผนที่และกดนำทางได้เลย"
+                      : "Select any itinerary to inspect ordered stops on the map and launch Google Maps"}
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-white bg-[var(--color-sun-yellow-light)] px-4 py-1.5 text-xs font-extrabold text-[var(--color-sun-text)] shadow-sm">
+                  <MapPin className="h-3.5 w-3.5 text-[var(--color-sun-amber)]" aria-hidden="true" />
+                  {t.search.showingPrefix} {displayTrips.length} {t.search.showingUnit}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {displayTrips.map((trip, index) => (
+                  <TripCard key={trip.id} trip={trip} index={index} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );
