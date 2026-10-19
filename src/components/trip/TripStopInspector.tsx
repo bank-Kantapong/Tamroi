@@ -41,6 +41,7 @@ export function TripStopInspector({
       aria-live="polite"
       className="cute-card animate-fade-up overflow-hidden border-[var(--color-brand-primary)]"
     >
+      {/* Inspector Header with Stop sequence & prev/next buttons */}
       <InspectorHeader
         selectedStop={selectedStop}
         orderedStops={orderedStops}
@@ -48,26 +49,28 @@ export function TripStopInspector({
         t={t}
       />
 
-      <div className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-12">
+      <div className="space-y-5 p-5">
+        {/* Full-width 3:2 Carousel specifically for this selected stop's photo set */}
         <InspectorImage
           selectedStop={selectedStop}
-          hasFailed={Boolean(failedStopImages[selectedStop.id])}
+          orderedStops={orderedStops}
+          failedStopImages={failedStopImages}
           onImageError={onImageError}
           t={t}
         />
 
-        <div className="flex flex-col justify-between sm:col-span-7">
-          <InspectorDetails selectedStop={selectedStop} t={t} />
+        {/* Bottom Details Row: Description, Stats Grid & Notes */}
+        <InspectorDetails selectedStop={selectedStop} t={t} />
 
-          <InspectorActions
-            selectedStop={selectedStop}
-            travelMode={travelMode}
-            onCopyCoordinates={onCopyCoordinates}
-            copiedStopId={copiedStopId}
-            copyErrorStopId={copyErrorStopId}
-            t={t}
-          />
-        </div>
+        {/* Action Buttons: Navigate in Google Maps & Copy Coordinates */}
+        <InspectorActions
+          selectedStop={selectedStop}
+          travelMode={travelMode}
+          onCopyCoordinates={onCopyCoordinates}
+          copiedStopId={copiedStopId}
+          copyErrorStopId={copyErrorStopId}
+          t={t}
+        />
       </div>
     </div>
   );

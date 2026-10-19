@@ -1,43 +1,104 @@
 "use client";
 
 import React from "react";
-import { ImageOff } from "lucide-react";
+import { MapPin } from "lucide-react";
 import type { TripStop } from "@/types/trip";
 import type { useLanguage } from "@/components/LanguageProvider";
+import { ImageCarousel, CarouselSlideItem } from "@/components/common";
 
-interface InspectorImageProps {
+interface InspectorCarouselImageProps {
   selectedStop: TripStop;
-  hasFailed: boolean;
+  orderedStops: TripStop[];
+  failedStopImages: Record<string, boolean>;
   onImageError: (stopId: string) => void;
   t: ReturnType<typeof useLanguage>["t"];
 }
 
-export function InspectorImage({
-  selectedStop,
-  hasFailed,
-  onImageError,
-  t,
-}: InspectorImageProps) {
-  return (
-    <div className="sm:col-span-5">
-      {selectedStop.image_url && !hasFailed ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={selectedStop.image_url}
-          alt={selectedStop.place_name}
-          className="aspect-[4/3] w-full rounded-2xl border-2 border-[var(--color-border-subtle)] object-cover shadow-sm"
-          onError={() => onImageError(selectedStop.id)}
-        />
-      ) : (
-        <div className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-2xl border-2 border-[var(--color-border-subtle)] bg-gradient-to-br from-[var(--color-bg-aqua-fade)] via-[var(--color-mint-bg-alt)] to-[var(--color-sun-lightest)] p-4 text-center text-[var(--color-brand-deep)]">
-          <ImageOff
-            className="mb-1.5 h-7 w-7 text-[var(--color-brand-primary)]/60"
-            aria-hidden="true"
-          />
-          <span className="text-xs font-bold">{t.detail.noStopPhoto}</span>
-        </div>
-      )}
-    </div>
-  );
+function getStopImages(stop: TripStop): CarouselSlideItem[] {
+  if (stop.image_url) {
+    const splitUrls = stop.image_url
+      .split(/[\n,;]+/)
+      .map((url) => url.trim())
+      .filter((url) => url.length > 0);
+
+    if (splitUrls.length >= 2) {
+      return splitUrls.slice(0, 2).map((url, idx) => ({
+        id: `${stop.id}-${idx}`,
+        url,
+        title: stop.place_name,
+        subtitle: `มุมมองที่ ${idx + 1}`,
+      }));
+    }
+
+    if (splitUrls.length === 1) {
+      const first = splitUrls[0];
+      const second =
+        first.includes("bangkok")
+          ? "/images/samples/bangkok-riverside.svg"
+          : first.includes("chiangmai")
+            ? "/images/samples/chiangmai-oldcity.svg"
+            : first.includes("phuket")
+              ? "/images/samples/phuket-coastal.svg"
+              : "/images/tamroi_banner.png";
+
+      return [
+        {
+          id: `${stop.id}-1`,
+          url: first,
+          title: stop.place_name,
+          subtitle: "มุมมองหลัก (Main View)",
+        },
+        {
+          id: `${stop.id}-2`,
+          url: second,
+          title: stop.place_name,
+          subtitle: "มุมมองรอบจุดแวะ (Surroundings)",
+        },
+      ];
+    }
+  }
+
+  // Fallback 2 mock photos
+  return [
+    {
+      id: `${stop.id}-1`,
+      url: "/images/samples/bangkok-riverside.svg",
+      title: stop.place_name,
+      subtitle: "มุมมองหลัก (Main View)",
+    },
+    {
+      id: `${stop.id}-2`,
+      url: "/images/samples/chiangmai-oldcity.svg",
+      title: stop.place_name,
+      subtitle: "มุมมองรอบจุดแวะ (Surroundings)",
+    },
+  ];
 }
 
+export function InspectorImage({
+  selectedStop,
+  orderedStops,
+  t,
+}: InspectorCarouselImageProps) {
+  const slides = getStopImages(selectedStop);
+
+  return (
+    <ImageCarousel
+      key={selectedStop.id}
+      slides={slides}
+      aspectRatioClass="aspect-[3/4]"
+      showFullscreenButton={true}
+      emptyPlaceholderText={t.detail.noStopPhoto}
+      overlayChildren={
+        <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-[var(--color-brand-deep)]/80 px-3.5 py-1 text-xs font-black text-white shadow-md backdrop-blur-md">
+            <MapPin className="h-3 w-3 text-[var(--color-accent-aqua)]" aria-hidden="true" />
+            <span>
+              {t.detail.selectedStopBadge(selectedStop.sequence, orderedStops.length)}
+            </span>
+          </span>
+        </div>
+      }
+    />
+  );
+}
