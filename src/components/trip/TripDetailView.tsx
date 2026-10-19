@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
@@ -17,8 +17,11 @@ import {
   buildTripGoogleMapsLinks,
   formatCoordinatePair,
 } from "@/lib/google-maps";
+import { calculateItineraryMetrics } from "@/lib/format-utils";
 import { useLanguage } from "@/components/LanguageProvider";
 import { localizeTripWithStops } from "@/lib/i18n-trips";
+import { useTripDetailStore } from "@/stores/useTripDetailStore";
+import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { TripScrapbookHeader } from "./TripScrapbookHeader";
 import { TripStopThumbnails } from "./TripStopThumbnails";
 import { TripStopInspector } from "./TripStopInspector";
@@ -54,27 +57,36 @@ export function TripDetailView({
 
   const orderedStops = [...trip.stops].sort((a, b) => a.sequence - b.sequence);
 
-  const [selectedStopId, setSelectedStopId] = useState<string | null>(
-    orderedStops[0]?.id ?? null
-  );
-  const [copiedStopId, setCopiedStopId] = useState<string | null>(null);
-  const [copyErrorStopId, setCopyErrorStopId] = useState<string | null>(null);
-  const [coverFailed, setCoverFailed] = useState(false);
-  const [failedStopImages, setFailedStopImages] = useState<
-    Record<string, boolean>
-  >({});
+  // Zustand Store for Trip Detail State
+  const {
+    selectedStopId,
+    coverFailed,
+    failedStopImages,
+    selectStop,
+    setCoverFailed,
+    markStopImageFailed,
+    resetState,
+  } = useTripDetailStore();
+
+  // Custom Hook for Copy Coordinates with Feedback
+  const {
+    copiedId: copiedStopId,
+    copyErrorId: copyErrorStopId,
+    copy: copyCoordinates,
+  } = useCopyFeedback({ resetDelayMs: 2500 });
+
+  // Initialize/Reset store on trip mount
+  const firstStopId = orderedStops[0]?.id ?? null;
+  useEffect(() => {
+    resetState(firstStopId);
+  }, [initialTrip.id, firstStopId, resetState]);
 
   const selectedStop =
     orderedStops.find((s) => s.id === selectedStopId) ?? orderedStops[0] ?? null;
 
-  const totalStopCost = orderedStops.reduce(
-    (sum, s) => sum + (s.estimated_cost ?? 0),
-    0
-  );
-  const totalEstimatedMinutes = orderedStops.reduce(
-    (sum, s) => sum + (s.estimated_minutes ?? 0),
-    0
-  );
+  // Reusable utility for calculating total cost & duration
+  const { totalCost: totalStopCost, totalMinutes: totalEstimatedMinutes } =
+    calculateItineraryMetrics(orderedStops);
 
   const googleMapsResult = buildTripGoogleMapsLinks(
     orderedStops,
@@ -90,48 +102,9 @@ export function TripDetailView({
           ? t.card.travelMode.transit
           : trip.travel_mode;
 
-  const handleSelectStop = (stopId: string, panMap: boolean = false) => {
-    setSelectedStopId(stopId);
-
-    const el = document.getElementById(`stop-item-${stopId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-
-    if (panMap && typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("tamroi:pan-to-stop", { detail: { stopId } })
-      );
-    }
-  };
-
   const handleCopyCoordinates = async (stop: TripStop) => {
     const text = formatCoordinatePair(stop.latitude, stop.longitude, 6);
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
-      setCopiedStopId(stop.id);
-      setCopyErrorStopId(null);
-      setTimeout(() => {
-        setCopiedStopId((curr) => (curr === stop.id ? null : curr));
-      }, 2500);
-    } catch {
-      setCopyErrorStopId(stop.id);
-      setTimeout(() => {
-        setCopyErrorStopId((curr) => (curr === stop.id ? null : curr));
-      }, 4000);
-    }
+    await copyCoordinates(stop.id, text);
   };
 
   const previewStops = orderedStops
@@ -201,7 +174,7 @@ export function TripDetailView({
       <TripStopThumbnails
         previewStops={previewStops}
         selectedStopId={selectedStopId}
-        onSelectStop={(id) => handleSelectStop(id, true)}
+        onSelectStop={(id) => selectStop(id, true)}
         locale={locale}
       />
 
@@ -257,7 +230,7 @@ export function TripDetailView({
               <TripLeafletMap
                 stops={orderedStops}
                 selectedStopId={selectedStop?.id ?? null}
-                onSelectStop={(id) => handleSelectStop(id, true)}
+                onSelectStop={(id) => selectStop(id, true)}
               />
             </section>
 
@@ -268,13 +241,8 @@ export function TripDetailView({
                 orderedStops={orderedStops}
                 travelMode={trip.travel_mode}
                 failedStopImages={failedStopImages}
-                onImageError={(stopId) =>
-                  setFailedStopImages((prev) => ({
-                    ...prev,
-                    [stopId]: true,
-                  }))
-                }
-                onSelectStop={(id) => handleSelectStop(id, true)}
+                onImageError={markStopImageFailed}
+                onSelectStop={(id) => selectStop(id, true)}
                 onCopyCoordinates={handleCopyCoordinates}
                 copiedStopId={copiedStopId}
                 copyErrorStopId={copyErrorStopId}
@@ -312,7 +280,7 @@ export function TripDetailView({
                     STOP_NUMBER_COLORS[idx % STOP_NUMBER_COLORS.length]
                   }
                   travelMode={trip.travel_mode}
-                  onSelectStop={handleSelectStop}
+                  onSelectStop={selectStop}
                   onCopyCoordinates={handleCopyCoordinates}
                   t={t}
                 />
