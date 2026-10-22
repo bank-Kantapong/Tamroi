@@ -8,6 +8,7 @@ export interface ModalImageItem {
   url: string;
   title: string;
   subtitle?: string;
+  credit?: string;
 }
 
 interface ImageLightboxModalProps {
@@ -95,11 +96,19 @@ export function ImageLightboxModal({
             <h2 className="font-heading text-sm font-black tracking-wide sm:text-base">
               {currentImage.title}
             </h2>
-            {currentImage.subtitle && (
-              <p className="text-xs font-semibold text-white/70">
-                {currentImage.subtitle}
-              </p>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {currentImage.subtitle && (
+                <p className="text-xs font-semibold text-white/70">
+                  {currentImage.subtitle}
+                </p>
+              )}
+              {currentImage.credit && (
+                <span className="inline-flex items-center gap-1 rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold text-white/90">
+                  <span className="text-white/60">Photo:</span>
+                  <span>{currentImage.credit}</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

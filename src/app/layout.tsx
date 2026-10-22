@@ -31,8 +31,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className={`${promptFont.variable} ${ibmThaiFont.variable}`}>
-      <body className="flex min-h-screen flex-col font-sans">
+    <html
+      lang="th"
+      suppressHydrationWarning
+      className={`${promptFont.variable} ${ibmThaiFont.variable}`}
+    >
+      <body suppressHydrationWarning className="flex min-h-screen flex-col font-sans">
         <LanguageProvider>
           <Navbar />
           <main id="main-content" className="flex-1">

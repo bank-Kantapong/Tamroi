@@ -14,7 +14,26 @@ interface InspectorCarouselImageProps {
   t: ReturnType<typeof useLanguage>["t"];
 }
 
+function parseImageUrlWithCredit(raw: string): { url: string; credit?: string } {
+  const trimmed = raw.trim();
+  // Support syntax: "https://example.com/photo.jpg | Photo by John Doe"
+  if (trimmed.includes("|")) {
+    const [u, ...c] = trimmed.split("|");
+    return { url: u.trim(), credit: c.join("|").trim() || undefined };
+  }
+  return { url: trimmed };
+}
+
+function extractCreditFromNotes(notes: string | null): string | undefined {
+  if (!notes) return undefined;
+  // Match patterns like "Photo: Name", "Credit: Name", "Photo by Name", "ภาพ: ชื่อ"
+  const match = notes.match(/(?:photo\s*(?:by|credit)?|credit|ภาพ\s*(?:โดย)?|เครดิต)\s*[:：\-]\s*([^,\n;]+)/i);
+  return match ? match[1].trim() : undefined;
+}
+
 function getStopImages(stop: TripStop): CarouselSlideItem[] {
+  const notesCredit = extractCreditFromNotes(stop.notes);
+
   if (stop.image_url) {
     const splitUrls = stop.image_url
       .split(/[\n,;]+/)
@@ -22,24 +41,31 @@ function getStopImages(stop: TripStop): CarouselSlideItem[] {
       .filter((url) => url.length > 0);
 
     if (splitUrls.length >= 2) {
-      return splitUrls.slice(0, 2).map((url, idx) => ({
-        id: `${stop.id}-${idx}`,
-        url,
-        title: stop.place_name,
-        subtitle: `มุมมองที่ ${idx + 1}`,
-      }));
+      return splitUrls.slice(0, 2).map((entry, idx) => {
+        const parsed = parseImageUrlWithCredit(entry);
+        return {
+          id: `${stop.id}-${idx}`,
+          url: parsed.url,
+          title: stop.place_name,
+          subtitle: `มุมมองที่ ${idx + 1}`,
+          credit: parsed.credit || notesCredit,
+        };
+      });
     }
 
     if (splitUrls.length === 1) {
-      const first = splitUrls[0];
+      const parsed = parseImageUrlWithCredit(splitUrls[0]);
+      const first = parsed.url;
       const second =
-        first.includes("bangkok")
-          ? "/images/samples/bangkok-riverside.svg"
-          : first.includes("chiangmai")
-            ? "/images/samples/chiangmai-oldcity.svg"
-            : first.includes("phuket")
-              ? "/images/samples/phuket-coastal.svg"
-              : "/images/tamroi_banner.png";
+        first.includes("hua-lamphong")
+          ? "/images/trips/hua-lamphong-chinatown-walk/cover.svg"
+          : first.includes("rattanakosin") || first.includes("bangkok")
+            ? "/images/trips/sample-rattanakosin-riverside-walk/cover.svg"
+            : first.includes("chiangmai") || first.includes("chiang-mai")
+              ? "/images/trips/sample-chiang-mai-old-city-loop/cover.svg"
+              : first.includes("phuket")
+                ? "/images/trips/sample-phuket-scenic-11-stops/cover.svg"
+                : "/images/tamroi_banner.png";
 
       return [
         {
@@ -47,12 +73,14 @@ function getStopImages(stop: TripStop): CarouselSlideItem[] {
           url: first,
           title: stop.place_name,
           subtitle: "มุมมองหลัก (Main View)",
+          credit: parsed.credit || notesCredit,
         },
         {
           id: `${stop.id}-2`,
           url: second,
           title: stop.place_name,
           subtitle: "มุมมองรอบจุดแวะ (Surroundings)",
+          credit: notesCredit,
         },
       ];
     }
@@ -65,12 +93,14 @@ function getStopImages(stop: TripStop): CarouselSlideItem[] {
       url: "/images/samples/bangkok-riverside.svg",
       title: stop.place_name,
       subtitle: "มุมมองหลัก (Main View)",
+      credit: notesCredit,
     },
     {
       id: `${stop.id}-2`,
       url: "/images/samples/chiangmai-oldcity.svg",
       title: stop.place_name,
       subtitle: "มุมมองรอบจุดแวะ (Surroundings)",
+      credit: notesCredit,
     },
   ];
 }

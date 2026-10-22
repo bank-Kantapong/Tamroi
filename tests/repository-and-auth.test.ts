@@ -37,8 +37,8 @@ describe("TripRepository CRUD, publication visibility, stop reordering, and Admi
     const publicTrips = await repo.listPublishedTrips();
     const adminTrips = await repo.listAllTripsForAdmin();
 
-    expect(publicTrips.length).toBe(3);
-    expect(adminTrips.length).toBe(4);
+    expect(publicTrips.length).toBe(4);
+    expect(adminTrips.length).toBe(5);
     expect(publicTrips.every((t) => t.status === "published")).toBe(true);
 
     // Draft slug must return null publicly

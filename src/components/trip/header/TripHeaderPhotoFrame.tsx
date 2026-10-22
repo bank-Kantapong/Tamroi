@@ -20,6 +20,21 @@ interface TripHeaderPhotoFrameProps {
   t: ReturnType<typeof useLanguage>["t"];
 }
 
+function parseImageUrlWithCredit(raw: string): { url: string; credit?: string } {
+  const trimmed = raw.trim();
+  if (trimmed.includes("|")) {
+    const [u, ...c] = trimmed.split("|");
+    return { url: u.trim(), credit: c.join("|").trim() || undefined };
+  }
+  return { url: trimmed };
+}
+
+function extractCreditFromNotes(notes: string | null): string | undefined {
+  if (!notes) return undefined;
+  const match = notes.match(/(?:photo\s*(?:by|credit)?|credit|ภาพ\s*(?:โดย)?|เครดิต)\s*[:：\-]\s*([^,\n;]+)/i);
+  return match ? match[1].trim() : undefined;
+}
+
 export function TripHeaderPhotoFrame({
   trip,
   orderedStops,
@@ -31,23 +46,28 @@ export function TripHeaderPhotoFrame({
   const slides: CarouselSlideItem[] = [];
 
   if (trip.cover_image_url && !coverFailed) {
+    const parsedCover = parseImageUrlWithCredit(trip.cover_image_url);
     slides.push({
       id: "cover",
-      url: trip.cover_image_url,
+      url: parsedCover.url,
       title: trip.title,
       subtitle: trip.province,
       badge: trip.province,
+      credit: parsedCover.credit,
     });
   }
 
   orderedStops.forEach((stop) => {
     if (stop.image_url) {
+      const parsed = parseImageUrlWithCredit(stop.image_url);
+      const notesCredit = extractCreditFromNotes(stop.notes);
       slides.push({
         id: stop.id,
-        url: stop.image_url,
+        url: parsed.url,
         title: stop.place_name,
         subtitle: `${locale === "th" ? `จุดที่ ${stop.sequence}` : `Stop #${stop.sequence}`}: ${stop.place_name}`,
         badge: `${locale === "th" ? `จุดที่ ${stop.sequence}` : `Stop #${stop.sequence}`}`,
+        credit: parsed.credit || notesCredit,
       });
     }
   });
@@ -66,7 +86,7 @@ export function TripHeaderPhotoFrame({
 
   return (
     <>
-      <div className="scrapbook-photo-frame relative lg:col-span-5">
+      <div className="relative lg:col-span-5">
         <ImageCarousel
           slides={slides}
           aspectRatioClass="aspect-[4/3] sm:aspect-[16/10] lg:aspect-auto min-h-[300px] h-full"
