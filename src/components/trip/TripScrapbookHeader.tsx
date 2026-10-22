@@ -44,7 +44,7 @@ export function TripScrapbookHeader({
       {/* Top-right Paper Plane + Looping Dashed Trail SVG */}
       <PaperPlaneDoodle className="pointer-events-none absolute -top-3 right-3 hidden h-20 w-40 select-none sm:block" />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-stretch">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
         {/* Left Column: Cover Photo Frame Subcomponent with Interactive Carousel */}
         <TripHeaderPhotoFrame
           trip={trip}

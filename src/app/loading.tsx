@@ -1,26 +1,50 @@
-﻿export default function Loading() {
+import { TripCardSkeletonGrid } from "@/components/skeleton";
+
+export default function Loading() {
   return (
     <div
-      className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8"
+      className="space-y-8 pb-16"
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="h-44 w-full animate-pulse rounded-[2.5rem] border-2 border-[var(--color-border-subtle)] bg-gradient-to-r from-[var(--color-bg-card-photo)] via-[var(--color-mint-bg-alt)] to-[var(--color-sun-cream)]" />
-      <div className="mt-6 h-24 w-full animate-pulse rounded-3xl border-2 border-[var(--color-border-subtle)] bg-white" />
-      <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3].map((item) => (
-          <div
-            key={item}
-            className="cute-card h-80 animate-pulse p-4"
-          >
-            <div className="h-40 w-full rounded-2xl bg-[var(--color-bg-card-photo)]" />
-            <div className="mt-4 h-5 w-3/4 rounded-full bg-[var(--color-bg-aqua-fade)]" />
-            <div className="mt-2 h-4 w-full rounded-full bg-[var(--color-mint-bg-alt)]" />
-            <div className="mt-6 h-10 w-full rounded-2xl bg-[var(--color-sun-cream)]" />
+      {/* Hero Banner Skeleton */}
+      <section className="relative overflow-hidden rounded-b-[3rem] border-b-4 border-[var(--color-border-subtle)] bg-gradient-to-br from-[var(--color-brand-deep)] via-[var(--color-brand-primary)] to-[var(--color-brand-primary)] pb-24 pt-10 text-white sm:pb-28 sm:pt-14">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12">
+            <div className="space-y-4 lg:col-span-5">
+              <div className="h-7 w-36 rounded-full bg-white/20 animate-pulse" />
+              <div className="h-12 w-4/5 rounded-2xl bg-white/25 animate-pulse sm:h-14" />
+              <div className="space-y-2 pt-2">
+                <div className="h-4 w-full rounded-full bg-white/15 animate-pulse" />
+                <div className="h-4 w-3/4 rounded-full bg-white/15 animate-pulse" />
+              </div>
+            </div>
+            <div className="lg:col-span-7">
+              <div className="h-64 w-full rounded-3xl bg-white/10 animate-pulse sm:h-80" />
+            </div>
           </div>
-        ))}
+        </div>
+      </section>
+
+      {/* Main Content Area */}
+      <div className="-mt-16 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
+        {/* Search & Filter Bar Skeleton */}
+        <div className="h-28 w-full rounded-3xl border-2 border-[var(--color-border-subtle)] bg-white p-4 shadow-lg animate-pulse" />
+
+        {/* Section title skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-4 w-28 rounded-full bg-slate-200 animate-pulse" />
+            <div className="h-8 w-64 rounded-full bg-slate-200 animate-pulse" />
+          </div>
+          <div className="h-8 w-28 rounded-full bg-slate-200 animate-pulse" />
+        </div>
+
+        {/* 6 Trip Cards Grid Skeleton */}
+        <TripCardSkeletonGrid count={6} />
       </div>
+
       <span className="sr-only">กำลังโหลดข้อมูลทริป...</span>
     </div>
   );

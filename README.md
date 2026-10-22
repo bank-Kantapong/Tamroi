@@ -1,8 +1,14 @@
-# TAMROI (ตามรอย) — Phase 1 MVP
+# TAMROI (ตามรอย) — Phase 2: Community & Auth
 
-**TAMROI (ตามรอย)** is a free-to-use curated trip discovery web application. Visitors browse ready-to-follow itineraries, inspect numbered stops on an interactive map, view stop details (arrival time, duration, cost, coordinates, notes), and open the complete itinerary or individual stops directly in Google Maps. Curators manage trips and stops through a protected Admin area.
+**TAMROI (ตามรอย)** is a free-to-use curated trip discovery web application. Visitors browse ready-to-follow itineraries, inspect numbered stops on an interactive map, view stop details (arrival time, duration, cost, coordinates, notes), and open the complete itinerary or individual stops directly in Google Maps.
 
-> **Scope Notice:** This repository implements **Phase 1 (MVP) only** in accordance with `AGENTS.md`. Phase 2/3 features (public user registration, community trip submissions, social reviews/likes, cross-device favorites, AI recommendations, and paid APIs) are intentionally excluded.
+In **Phase 2**, TAMROI introduces:
+1. **User Authentication & Profiles:** Secure sign-up, sign-in, sign-out, session persistence, and customizable display name and avatar.
+2. **Saved Trips (Cross-Device Sync):** Bookmark published itineraries to your personal library, synchronizing seamlessly across mobile and desktop.
+3. **Community Trip Submissions:** Registered users can create and submit curated itineraries with ordered stops, keeping them in draft or submitting them for review.
+4. **Admin Moderation Queue:** Administrators can inspect community submissions, approve and publish them to public discovery, or reject them with feedback reasons.
+
+> **Phase Gate Notice:** Phase 1 and Phase 2 are complete. Phase 3 features (social comments, likes, public profiles, AI recommendations, and paid APIs) remain excluded until explicitly authorized.
 
 ---
 
@@ -15,7 +21,7 @@
 | **Interactive Map** | Leaflet + OpenStreetMap tiles | Open-source (`leaflet`); configurable tile URL with mandatory OSM attribution |
 | **Navigation Handoff** | Standard Google Maps URLs (`api=1`) | 100% free URL links; no paid Google Maps JS SDK or Directions API billing required |
 | **Database** | Dual-adapter `TripRepository` (`Supabase` or `Local JSON`) | Works out-of-the-box locally ($0) and supports **Supabase PostgreSQL Free Tier** in cloud |
-| **Admin Auth** | Signed `HttpOnly` HMAC-SHA256 session cookies | Server-verified credentials via environment variables; zero paid auth dependencies |
+| **Authentication** | Signed `HttpOnly` HMAC-SHA256 session cookies | Zero paid auth dependencies; passwords hashed via built-in `crypto.scrypt` with random salt |
 | **Validation & Tests** | Zod + Vitest | Server-side schema validation + automated unit & integration test suite |
 
 ---
@@ -75,27 +81,30 @@ All variables are documented in `.env.example`:
 
 ---
 
-## 4. Database Setup (Supabase PostgreSQL Free Tier)
+## 4. Database Setup & Migrations (Supabase PostgreSQL Free Tier)
 
 To use a hosted PostgreSQL database instead of the local file store:
 
 1. Create a free project at [supabase.com](https://supabase.com) (no credit card required for the Free plan).
-2. Open the **SQL Editor** in your Supabase dashboard and run the migration file:
-   - `supabase/migrations/001_init_tamroi_phase1.sql`
-3. This migration creates:
-   - `public.trips` and `public.trip_stops` tables with coordinate range constraints (`latitude` `[-90, 90]`, `longitude` `[-180, 180]`), sequence uniqueness, and foreign key cascade delete.
-   - Row Level Security (RLS) policies allowing `anon` public reads **only** where `status = 'published'`.
+2. Open the **SQL Editor** in your Supabase dashboard and run the migration files in order:
+   - `supabase/migrations/001_init_tamroi_phase1.sql`: Initial tables (`trips`, `trip_stops`), indexes, and RLS policies.
+   - `supabase/migrations/002_phase2_community_and_auth.sql`: Additive Phase 2 schema (`profiles`, `saved_trips`, moderation columns on `trips`, and community RLS policies).
+3. The migrations create:
+   - `public.trips` with `created_by`, `rejection_reason`, `submitted_at`, `reviewed_at`, `reviewed_by`, and expanded status `('draft', 'pending_review', 'published', 'rejected')`.
+   - `public.profiles` for user display name, avatar, and role.
+   - `public.saved_trips` with a unique constraint on `(user_id, trip_id)` preventing duplicate saves.
+   - Row Level Security (RLS) policies allowing public reads **only** where `status = 'published'`, and strict ownership policies for saved trips and community submissions.
 4. Copy your project's `Project URL`, `anon public` key, and `service_role` secret key into `.env.local` (or your hosting provider's environment variables).
 5. Run `npm run db:seed` to seed the initial sample itineraries into Supabase.
 
 ---
 
-## 5. Admin Provisioning & Security
+## 5. User Authentication & Admin Provisioning
 
-- **No Public Registration:** Phase 1 has no public sign-up. Only the administrator configured via `ADMIN_EMAIL` and `ADMIN_PASSWORD` can sign in at `/admin/login`.
-- **Production Safety:** In `NODE_ENV=production`, the app refuses to use fallback development credentials—you **must** set strong values for `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET`.
-- **Server-Side Enforcement:** Every admin page (`/admin`, `/admin/trips/new`, `/admin/trips/[tripId]/edit`) and every admin API route (`/api/admin/...`) verifies the HMAC-SHA256 signed `HttpOnly` cookie on the server before reading draft data or mutating records.
-- **Draft Isolation:** Trips with `status = 'draft'` never appear on `/` or `/trips/[slug]` for public visitors. Authenticated admins can preview drafts using `/trips/[slug]?preview=1`.
+- **User Accounts:** Visitors can sign up at `/register` and sign in at `/login`. Passwords are encrypted with `crypto.scrypt` using unique random salts and verified in constant time.
+- **Admin Provisioning:** The initial administrator is securely provisioned via server environment variables (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET`). When signing in with these credentials, the administrator is automatically recognized and granted admin permissions without hardcoding credentials in source control.
+- **Server-Side Enforcement:** Every admin endpoint (`/api/admin/...`, `/admin/moderation`), profile update, saved-trip mutation, and submission edit verifies authorization on the server. Non-admin or unauthenticated requests are rejected with 401 or 403.
+- **Moderation Privacy:** Community submissions in `pending_review`, `draft`, or `rejected` status never leak into public listings, search results, or public slug routes `/trips/[slug]`. Only approved `published` trips appear publicly.
 
 ---
 

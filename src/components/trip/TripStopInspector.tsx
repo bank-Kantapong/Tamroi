@@ -17,9 +17,6 @@ interface TripStopInspectorProps {
   failedStopImages: Record<string, boolean>;
   onImageError: (stopId: string) => void;
   onSelectStop: (stopId: string) => void;
-  onCopyCoordinates: (stop: TripStop) => void;
-  copiedStopId: string | null;
-  copyErrorStopId: string | null;
   t: ReturnType<typeof useLanguage>["t"];
 }
 
@@ -30,9 +27,6 @@ export function TripStopInspector({
   failedStopImages,
   onImageError,
   onSelectStop,
-  onCopyCoordinates,
-  copiedStopId,
-  copyErrorStopId,
   t,
 }: TripStopInspectorProps) {
   return (
@@ -50,7 +44,7 @@ export function TripStopInspector({
       />
 
       <div className="space-y-5 p-5">
-        {/* Full-width 3:2 Carousel specifically for this selected stop's photo set */}
+        {/* Full-width 3:4 Carousel specifically for this selected stop's photo set */}
         <InspectorImage
           selectedStop={selectedStop}
           orderedStops={orderedStops}
@@ -62,13 +56,10 @@ export function TripStopInspector({
         {/* Bottom Details Row: Description, Stats Grid & Notes */}
         <InspectorDetails selectedStop={selectedStop} t={t} />
 
-        {/* Action Buttons: Navigate in Google Maps & Copy Coordinates */}
+        {/* Action Button: Navigate in Google Maps */}
         <InspectorActions
           selectedStop={selectedStop}
           travelMode={travelMode}
-          onCopyCoordinates={onCopyCoordinates}
-          copiedStopId={copiedStopId}
-          copyErrorStopId={copyErrorStopId}
           t={t}
         />
       </div>

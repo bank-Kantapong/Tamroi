@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -19,6 +19,7 @@ import type { TravelMode, TripListItem } from "@/types/trip";
 import { useLanguage } from "@/components/LanguageProvider";
 import { localizeTrip } from "@/lib/i18n-trips";
 import { dictionary, type Locale } from "@/lib/i18n";
+import { SaveTripButton } from "@/components/trip/SaveTripButton";
 
 export function formatBudgetRange(
   min: number | null,
@@ -37,14 +38,20 @@ export function formatBudgetRange(
 
 export function TravelModeBadge({ mode }: { mode: TravelMode }) {
   const { t } = useLanguage();
-  const icons: Record<TravelMode, typeof Car> = {
+  if (!mode) return null;
+
+  const icons: Record<string, typeof Car> = {
     driving: Car,
     walking: Footprints,
     transit: Train,
     bicycling: Bike,
+    other: Compass,
   };
-  const Icon = icons[mode] ?? Car;
-  const label = t.card.travelMode[mode] ?? t.card.travelMode.driving;
+  const Icon = icons[mode] ?? Compass;
+  const label =
+    mode === "other"
+      ? "อื่นๆ"
+      : t.card.travelMode[mode as keyof typeof t.card.travelMode] ?? t.card.travelMode.driving;
 
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--color-mint-border-alt)] bg-[var(--color-mint-bg-alt)] px-2.5 py-0.5 text-xs font-extrabold text-[var(--color-mint-text-dark)] shadow-sm">
@@ -71,7 +78,10 @@ export function TripCard({
   const { locale, t } = useLanguage();
   const trip = localizeTrip(rawTrip, locale);
   const [imageFailed, setImageFailed] = useState(false);
-  const showImage = Boolean(trip.cover_image_url) && !imageFailed;
+  const primaryCover = trip.cover_image_url
+    ? trip.cover_image_url.split(/[\n,]/)[0].trim()
+    : null;
+  const showImage = Boolean(primaryCover) && !imageFailed;
   const numberBadgeColor = BADGE_COLORS[index % BADGE_COLORS.length];
 
   return (
@@ -79,15 +89,15 @@ export function TripCard({
       style={{ animationDelay: `${Math.min(index * 70, 280)}ms` }}
       className="cute-card card-interactive animate-fade-up group flex flex-col overflow-hidden p-3 transition-all hover:border-[var(--color-accent-aqua)]"
     >
-      {/* Cute Scrapbook Photo Frame */}
+      {/* Cute Scrapbook Photo Frame (1:1 Aspect Ratio) */}
       <Link
         href={`/trips/${trip.slug}`}
-        className="relative block aspect-[16/10] w-full overflow-hidden rounded-2xl border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)]"
+        className="relative block aspect-square w-full overflow-hidden rounded-2xl border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)]"
       >
         {showImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={trip.cover_image_url!}
+            src={primaryCover!}
             alt={trip.title}
             className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             loading="lazy"
@@ -115,6 +125,11 @@ export function TripCard({
           <span className="inline-flex items-center rounded-full border border-[var(--color-border-subtle)] bg-white/95 px-2.5 py-0.5 text-xs font-extrabold text-[var(--color-brand-primary)] shadow-sm backdrop-blur-md">
             {trip.category}
           </span>
+        </div>
+
+        {/* Top-right Save Bookmark Button */}
+        <div className="absolute right-2.5 top-2.5 z-10">
+          <SaveTripButton tripId={trip.id} variant="card" />
         </div>
 
         {/* Sample Sticker Badge */}

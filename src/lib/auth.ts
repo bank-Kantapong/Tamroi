@@ -1,8 +1,11 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import type { SessionUser, UserRole } from "@/types/trip";
 
 export const ADMIN_COOKIE_NAME = "tamroi_admin_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+export const USER_COOKIE_NAME = "tamroi_user_session";
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours for admin
+const USER_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days for users
 
 interface AdminConfig {
   email: string;
@@ -148,16 +151,156 @@ export function verifyAdminSessionToken(
 export async function getAdminSession(): Promise<{
   authenticated: boolean;
   email?: string;
+  userId?: string;
   isUsingDevDefaults: boolean;
 }> {
   const config = getAdminConfig();
-  const cookieStore = await cookies();
-  const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
-  const verified = verifyAdminSessionToken(token);
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+    const verified = verifyAdminSessionToken(token);
+    if (verified.authenticated) {
+      return {
+        ...verified,
+        isUsingDevDefaults: config?.isUsingDevDefaults ?? false,
+      };
+    }
+
+    // Also support user session with role === "admin"
+    const userToken = cookieStore.get(USER_COOKIE_NAME)?.value;
+    const userVerified = verifyUserSessionToken(userToken);
+    if (userVerified.authenticated && userVerified.user?.role === "admin") {
+      return {
+        authenticated: true,
+        email: userVerified.user.email,
+        userId: userVerified.user.id,
+        isUsingDevDefaults: config?.isUsingDevDefaults ?? false,
+      };
+    }
+  } catch {
+    // Ignore cookie read failure
+  }
 
   return {
-    ...verified,
+    authenticated: false,
     isUsingDevDefaults: config?.isUsingDevDefaults ?? false,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: User Password Hashing and Session Management
+// ---------------------------------------------------------------------------
+
+export function hashPassword(password: string): { salt: string; hash: string } {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return { salt, hash };
+}
+
+export function verifyPassword(password: string, salt: string, expectedHash: string): boolean {
+  try {
+    const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+    return safeEqualStrings(hash, expectedHash);
+  } catch {
+    return false;
+  }
+}
+
+function getSessionSecret(): string {
+  const secret = process.env.ADMIN_SESSION_SECRET?.trim() || process.env.SESSION_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET or ADMIN_SESSION_SECRET is required in production.");
+  }
+  return "tamroi-local-dev-only-session-secret-key-2026";
+}
+
+export function createUserSessionToken(user: SessionUser, nowMs = Date.now()): string {
+  const secret = getSessionSecret();
+  const payload = {
+    sub: user.id,
+    email: user.email.toLowerCase(),
+    display_name: user.display_name,
+    role: user.role,
+    avatar_url: user.avatar_url,
+    iat: nowMs,
+    exp: nowMs + USER_SESSION_TTL_MS,
+  };
+
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = crypto.createHmac("sha256", secret).update(encodedPayload).digest("base64url");
+  return `${encodedPayload}.${signature}`;
+}
+
+export function verifyUserSessionToken(
+  token: string | undefined | null,
+  nowMs = Date.now()
+): { authenticated: boolean; user?: SessionUser } {
+  if (!token || typeof token !== "string") {
+    return { authenticated: false };
+  }
+
+  const parts = token.split(".");
+  if (parts.length !== 2) {
+    return { authenticated: false };
+  }
+
+  try {
+    const secret = getSessionSecret();
+    const [encodedPayload, providedSignature] = parts;
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(encodedPayload)
+      .digest("base64url");
+
+    if (!safeEqualStrings(providedSignature, expectedSignature)) {
+      return { authenticated: false };
+    }
+
+    const rawJson = Buffer.from(encodedPayload, "base64url").toString("utf8");
+    const parsed = JSON.parse(rawJson) as {
+      sub?: string;
+      email?: string;
+      display_name?: string;
+      role?: UserRole;
+      avatar_url?: string | null;
+      exp?: number;
+    };
+
+    if (
+      typeof parsed.sub !== "string" ||
+      typeof parsed.email !== "string" ||
+      typeof parsed.exp !== "number" ||
+      parsed.exp <= nowMs
+    ) {
+      return { authenticated: false };
+    }
+
+    return {
+      authenticated: true,
+      user: {
+        id: parsed.sub,
+        email: parsed.email,
+        display_name: parsed.display_name || parsed.email.split("@")[0],
+        role: parsed.role || "user",
+        avatar_url: parsed.avatar_url || null,
+      },
+    };
+  } catch {
+    return { authenticated: false };
+  }
+}
+
+export async function getUserSession(): Promise<{
+  authenticated: boolean;
+  user?: SessionUser;
+}> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(USER_COOKIE_NAME)?.value;
+    return verifyUserSessionToken(token);
+  } catch {
+    return { authenticated: false };
+  }
 }
 

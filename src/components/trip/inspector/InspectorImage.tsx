@@ -40,69 +40,21 @@ function getStopImages(stop: TripStop): CarouselSlideItem[] {
       .map((url) => url.trim())
       .filter((url) => url.length > 0);
 
-    if (splitUrls.length >= 2) {
-      return splitUrls.slice(0, 2).map((entry, idx) => {
+    if (splitUrls.length > 0) {
+      return splitUrls.map((entry, idx) => {
         const parsed = parseImageUrlWithCredit(entry);
         return {
           id: `${stop.id}-${idx}`,
           url: parsed.url,
           title: stop.place_name,
-          subtitle: `มุมมองที่ ${idx + 1}`,
+          subtitle: splitUrls.length > 1 ? `มุมมองที่ ${idx + 1}` : undefined,
           credit: parsed.credit || notesCredit,
         };
       });
     }
-
-    if (splitUrls.length === 1) {
-      const parsed = parseImageUrlWithCredit(splitUrls[0]);
-      const first = parsed.url;
-      const second =
-        first.includes("hua-lamphong")
-          ? "/images/trips/hua-lamphong-chinatown-walk/cover.svg"
-          : first.includes("rattanakosin") || first.includes("bangkok")
-            ? "/images/trips/sample-rattanakosin-riverside-walk/cover.svg"
-            : first.includes("chiangmai") || first.includes("chiang-mai")
-              ? "/images/trips/sample-chiang-mai-old-city-loop/cover.svg"
-              : first.includes("phuket")
-                ? "/images/trips/sample-phuket-scenic-11-stops/cover.svg"
-                : "/images/tamroi_banner.png";
-
-      return [
-        {
-          id: `${stop.id}-1`,
-          url: first,
-          title: stop.place_name,
-          subtitle: "มุมมองหลัก (Main View)",
-          credit: parsed.credit || notesCredit,
-        },
-        {
-          id: `${stop.id}-2`,
-          url: second,
-          title: stop.place_name,
-          subtitle: "มุมมองรอบจุดแวะ (Surroundings)",
-          credit: notesCredit,
-        },
-      ];
-    }
   }
 
-  // Fallback 2 mock photos
-  return [
-    {
-      id: `${stop.id}-1`,
-      url: "/images/samples/bangkok-riverside.svg",
-      title: stop.place_name,
-      subtitle: "มุมมองหลัก (Main View)",
-      credit: notesCredit,
-    },
-    {
-      id: `${stop.id}-2`,
-      url: "/images/samples/chiangmai-oldcity.svg",
-      title: stop.place_name,
-      subtitle: "มุมมองรอบจุดแวะ (Surroundings)",
-      credit: notesCredit,
-    },
-  ];
+  return [];
 }
 
 export function InspectorImage({
@@ -113,22 +65,24 @@ export function InspectorImage({
   const slides = getStopImages(selectedStop);
 
   return (
-    <ImageCarousel
-      key={selectedStop.id}
-      slides={slides}
-      aspectRatioClass="aspect-[3/4]"
-      showFullscreenButton={true}
-      emptyPlaceholderText={t.detail.noStopPhoto}
-      overlayChildren={
-        <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-[var(--color-brand-deep)]/80 px-3.5 py-1 text-xs font-black text-white shadow-md backdrop-blur-md">
-            <MapPin className="h-3 w-3 text-[var(--color-accent-aqua)]" aria-hidden="true" />
-            <span>
-              {t.detail.selectedStopBadge(selectedStop.sequence, orderedStops.length)}
+    <div className="w-full max-w-md mx-auto">
+      <ImageCarousel
+        key={selectedStop.id}
+        slides={slides}
+        aspectRatioClass="aspect-[3/4] w-full"
+        showFullscreenButton={true}
+        emptyPlaceholderText={t.detail.noStopPhoto}
+        overlayChildren={
+          <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-[var(--color-brand-deep)]/80 px-3.5 py-1 text-xs font-black text-white shadow-md backdrop-blur-md">
+              <MapPin className="h-3 w-3 text-[var(--color-accent-aqua)]" aria-hidden="true" />
+              <span>
+                {t.detail.selectedStopBadge(selectedStop.sequence, orderedStops.length)}
+              </span>
             </span>
-          </span>
-        </div>
-      }
-    />
+          </div>
+        }
+      />
+    </div>
   );
 }

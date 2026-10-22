@@ -5,6 +5,7 @@ import Link from "next/link";
 import { TripListItem, TripFilterParams } from "@/types/trip";
 import { SearchFilterBar } from "@/components/SearchFilterBar";
 import { TripCard } from "@/components/trip/TripCard";
+import { TripCardSkeletonGrid } from "@/components/skeleton";
 import { useLanguage } from "@/components/LanguageProvider";
 import { HomeHeroInfographic } from "./HomeHeroInfographic";
 import { CurvedUnderline } from "@/components/illustrations";
@@ -15,7 +16,6 @@ import {
   Compass,
   Info,
   Sparkles,
-  Loader2,
 } from "lucide-react";
 
 interface HomeClientProps {
@@ -184,20 +184,20 @@ export function HomeClient({
           </Link>
         </div>
 
-        {/* Trip Results Area with Async Loading Overlay / Grid */}
+        {/* Trip Results Area with Async Skeleton Loading Grid */}
         <div className="relative min-h-[300px]">
-          {isLoading && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-white/70 backdrop-blur-sm transition-all">
-              <div className="flex flex-col items-center gap-3 rounded-3xl border-2 border-[var(--color-border-subtle)] bg-white px-8 py-6 shadow-xl">
-                <Loader2 className="h-8 w-8 animate-spin text-[var(--color-brand-primary)]" />
-                <p className="font-heading text-sm font-black text-[var(--color-brand-deep)]">
-                  {locale === "th" ? "กำลังค้นหาเส้นทาง..." : "Searching routes..."}
-                </p>
+          {isLoading ? (
+            <section aria-label="Searching routes">
+              <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+                <div className="space-y-2">
+                  <div className="h-6 w-32 rounded-full bg-slate-200 animate-pulse" />
+                  <div className="h-8 w-64 rounded-full bg-slate-200 animate-pulse" />
+                </div>
+                <div className="h-8 w-28 rounded-full bg-slate-200 animate-pulse" />
               </div>
-            </div>
-          )}
-
-          {displayTrips.length === 0 ? (
+              <TripCardSkeletonGrid count={6} />
+            </section>
+          ) : displayTrips.length === 0 ? (
             <div className="cute-card border-dashed p-12 text-center">
               <div className="mx-auto flex h-16 w-16 -rotate-6 items-center justify-center rounded-3xl border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)] text-[var(--color-brand-primary)] shadow-sm">
                 <Compass className="h-8 w-8" aria-hidden="true" />

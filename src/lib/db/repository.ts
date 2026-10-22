@@ -5,14 +5,20 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateOrUpdateStopInput,
   CreateOrUpdateTripInput,
+  Profile,
+  SavedTrip,
   Trip,
   TripFilterParams,
   TripListItem,
   TripStatus,
   TripStop,
+  TripSubmissionInput,
   TripWithStops,
+  UserRecord,
+  UserRole,
 } from "../../types/trip";
 import { INITIAL_SEED_DATA, type SeedDatabaseState } from "./seed-data.ts";
+import { slugify } from "../validation";
 
 export class DuplicateSlugError extends Error {
   constructor(slug: string) {
@@ -21,10 +27,31 @@ export class DuplicateSlugError extends Error {
   }
 }
 
+export class DuplicateEmailError extends Error {
+  constructor(email: string) {
+    super(`A user with the email "${email}" already exists.`);
+    this.name = "DuplicateEmailError";
+  }
+}
+
+export class DuplicateSaveError extends Error {
+  constructor() {
+    super("This trip is already in your saved trips.");
+    this.name = "DuplicateSaveError";
+  }
+}
+
 export class NotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "NotFoundError";
+  }
+}
+
+export class ForbiddenError extends Error {
+  constructor(message = "You do not have permission to perform this action.") {
+    super(message);
+    this.name = "ForbiddenError";
   }
 }
 
@@ -51,6 +78,41 @@ export interface TripRepository {
   deleteStop(tripId: string, stopId: string): Promise<void>;
   reorderStops(tripId: string, orderedStopIds: string[]): Promise<TripStop[]>;
   resetToSeedData(): Promise<void>;
+
+  // Phase 2: Auth & Profiles
+  findUserByEmail(email: string): Promise<UserRecord | null>;
+  findUserById(id: string): Promise<UserRecord | null>;
+  createUser(
+    email: string,
+    passwordHash: string,
+    salt: string,
+    displayName: string,
+    role?: UserRole
+  ): Promise<{ user: UserRecord; profile: Profile }>;
+  getProfile(userId: string): Promise<Profile | null>;
+  updateProfile(userId: string, input: { display_name?: string; avatar_url?: string | null }): Promise<Profile>;
+
+  // Phase 2: Saved Trips
+  saveTrip(userId: string, tripId: string): Promise<SavedTrip>;
+  unsaveTrip(userId: string, tripId: string): Promise<void>;
+  isTripSaved(userId: string, tripId: string): Promise<boolean>;
+  listSavedTripIds(userId: string): Promise<string[]>;
+  listSavedTrips(userId: string): Promise<TripListItem[]>;
+
+  // Phase 2: Community Submissions
+  listUserSubmissions(userId: string): Promise<TripListItem[]>;
+  getUserSubmissionById(userId: string, tripId: string): Promise<TripWithStops | null>;
+  createSubmission(userId: string, input: TripSubmissionInput): Promise<TripWithStops>;
+  updateSubmission(userId: string, tripId: string, input: TripSubmissionInput): Promise<TripWithStops>;
+
+  // Phase 2: Admin Moderation
+  listPendingSubmissions(): Promise<TripListItem[]>;
+  reviewSubmission(
+    adminUserId: string,
+    tripId: string,
+    action: "approve" | "reject",
+    rejectionReason?: string | null
+  ): Promise<Trip>;
 }
 
 const BILINGUAL_SEARCH_ALIASES: Record<string, string> = {
@@ -154,6 +216,9 @@ export class LocalFileTripRepository implements TripRepository {
         this.writeState(initial);
         return initial;
       }
+      if (!Array.isArray(parsed.users)) parsed.users = [];
+      if (!Array.isArray(parsed.profiles)) parsed.profiles = [];
+      if (!Array.isArray(parsed.saved_trips)) parsed.saved_trips = [];
       return parsed;
     } catch {
       const initial = structuredClone(INITIAL_SEED_DATA);
@@ -271,7 +336,8 @@ export class LocalFileTripRepository implements TripRepository {
       duration_hours: input.duration_hours ?? null,
       budget_min: input.budget_min ?? null,
       budget_max: input.budget_max ?? null,
-      travel_mode: input.travel_mode,
+      travel_mode: input.travel_mode ?? null,
+      travel_mode_note: input.travel_mode_note ?? null,
       status: input.status,
       is_sample: input.is_sample ?? false,
       created_at: now,
@@ -309,7 +375,8 @@ export class LocalFileTripRepository implements TripRepository {
       duration_hours: input.duration_hours ?? null,
       budget_min: input.budget_min ?? null,
       budget_max: input.budget_max ?? null,
-      travel_mode: input.travel_mode,
+      travel_mode: input.travel_mode ?? null,
+      travel_mode_note: input.travel_mode_note ?? null,
       status: input.status,
       is_sample: input.is_sample ?? existing.is_sample,
       updated_at: new Date().toISOString(),
@@ -340,6 +407,7 @@ export class LocalFileTripRepository implements TripRepository {
     }
     state.trips = state.trips.filter((t) => t.id !== tripId);
     state.trip_stops = state.trip_stops.filter((s) => s.trip_id !== tripId);
+    state.saved_trips = state.saved_trips.filter((s) => s.trip_id !== tripId);
     this.writeState(state);
   }
 
@@ -474,6 +542,361 @@ export class LocalFileTripRepository implements TripRepository {
     return state.trip_stops
       .filter((s) => s.trip_id === tripId)
       .sort((a, b) => a.sequence - b.sequence);
+  }
+
+  // --- Phase 2: Auth & Profiles ---
+
+  async findUserByEmail(email: string): Promise<UserRecord | null> {
+    const state = this.readState();
+    const normalized = email.trim().toLowerCase();
+    const user = state.users.find((u) => u.email.toLowerCase() === normalized);
+    return user ? structuredClone(user) : null;
+  }
+
+  async findUserById(id: string): Promise<UserRecord | null> {
+    const state = this.readState();
+    const user = state.users.find((u) => u.id === id);
+    return user ? structuredClone(user) : null;
+  }
+
+  async createUser(
+    email: string,
+    passwordHash: string,
+    salt: string,
+    displayName: string,
+    role: UserRole = "user"
+  ): Promise<{ user: UserRecord; profile: Profile }> {
+    const state = this.readState();
+    const normalized = email.trim().toLowerCase();
+    if (state.users.some((u) => u.email.toLowerCase() === normalized)) {
+      throw new DuplicateEmailError(normalized);
+    }
+
+    const now = new Date().toISOString();
+    const userId = crypto.randomUUID();
+
+    const user: UserRecord = {
+      id: userId,
+      email: normalized,
+      password_hash: passwordHash,
+      salt,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const profile: Profile = {
+      user_id: userId,
+      display_name: displayName.trim(),
+      avatar_url: null,
+      role,
+      created_at: now,
+      updated_at: now,
+    };
+
+    state.users.push(user);
+    state.profiles.push(profile);
+    this.writeState(state);
+
+    return { user: structuredClone(user), profile: structuredClone(profile) };
+  }
+
+  async getProfile(userId: string): Promise<Profile | null> {
+    const state = this.readState();
+    const profile = state.profiles.find((p) => p.user_id === userId);
+    return profile ? structuredClone(profile) : null;
+  }
+
+  async updateProfile(
+    userId: string,
+    input: { display_name?: string; avatar_url?: string | null }
+  ): Promise<Profile> {
+    const state = this.readState();
+    const profile = state.profiles.find((p) => p.user_id === userId);
+    if (!profile) {
+      throw new NotFoundError(`Profile for user "${userId}" not found.`);
+    }
+
+    const now = new Date().toISOString();
+    if (typeof input.display_name === "string" && input.display_name.trim().length > 0) {
+      profile.display_name = input.display_name.trim();
+    }
+    if (input.avatar_url !== undefined) {
+      profile.avatar_url = input.avatar_url;
+    }
+    profile.updated_at = now;
+
+    this.writeState(state);
+    return structuredClone(profile);
+  }
+
+  // --- Phase 2: Saved Trips ---
+
+  async saveTrip(userId: string, tripId: string): Promise<SavedTrip> {
+    const state = this.readState();
+    const trip = state.trips.find((t) => t.id === tripId);
+    if (!trip || trip.status !== "published") {
+      throw new NotFoundError("Trip not found or is not published.");
+    }
+
+    const exists = state.saved_trips.some(
+      (s) => s.user_id === userId && s.trip_id === tripId
+    );
+    if (exists) {
+      throw new DuplicateSaveError();
+    }
+
+    const saved: SavedTrip = {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      trip_id: tripId,
+      created_at: new Date().toISOString(),
+    };
+
+    state.saved_trips.push(saved);
+    this.writeState(state);
+    return structuredClone(saved);
+  }
+
+  async unsaveTrip(userId: string, tripId: string): Promise<void> {
+    const state = this.readState();
+    const initialLen = state.saved_trips.length;
+    state.saved_trips = state.saved_trips.filter(
+      (s) => !(s.user_id === userId && s.trip_id === tripId)
+    );
+    if (state.saved_trips.length !== initialLen) {
+      this.writeState(state);
+    }
+  }
+
+  async isTripSaved(userId: string, tripId: string): Promise<boolean> {
+    const state = this.readState();
+    return state.saved_trips.some(
+      (s) => s.user_id === userId && s.trip_id === tripId
+    );
+  }
+
+  async listSavedTripIds(userId: string): Promise<string[]> {
+    const state = this.readState();
+    return state.saved_trips
+      .filter((s) => s.user_id === userId)
+      .map((s) => s.trip_id);
+  }
+
+  async listSavedTrips(userId: string): Promise<TripListItem[]> {
+    const state = this.readState();
+    const savedIds = new Set(
+      state.saved_trips
+        .filter((s) => s.user_id === userId)
+        .map((s) => s.trip_id)
+    );
+
+    const published = state.trips
+      .filter((t) => savedIds.has(t.id) && t.status === "published")
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+    return published.map((trip) => ({
+      ...trip,
+      stop_count: state.trip_stops.filter((s) => s.trip_id === trip.id).length,
+    }));
+  }
+
+  // --- Phase 2: Community Submissions ---
+
+  async listUserSubmissions(userId: string): Promise<TripListItem[]> {
+    const state = this.readState();
+    const submissions = state.trips
+      .filter((t) => t.created_by === userId)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+    return submissions.map((trip) => ({
+      ...trip,
+      stop_count: state.trip_stops.filter((s) => s.trip_id === trip.id).length,
+    }));
+  }
+
+  async getUserSubmissionById(userId: string, tripId: string): Promise<TripWithStops | null> {
+    const state = this.readState();
+    const trip = state.trips.find((t) => t.id === tripId && t.created_by === userId);
+    if (!trip) return null;
+
+    const stops = state.trip_stops
+      .filter((s) => s.trip_id === trip.id)
+      .sort((a, b) => a.sequence - b.sequence);
+
+    return { ...trip, stops };
+  }
+
+  async createSubmission(userId: string, input: TripSubmissionInput): Promise<TripWithStops> {
+    const state = this.readState();
+    let baseSlug = input.slug?.trim() ? slugify(input.slug) : slugify(input.title);
+    if (!baseSlug) baseSlug = `trip-${Date.now()}`;
+    let finalSlug = baseSlug;
+    let counter = 1;
+    while (state.trips.some((t) => t.slug.toLowerCase() === finalSlug.toLowerCase())) {
+      finalSlug = `${baseSlug}-${counter++}`;
+    }
+
+    const now = new Date().toISOString();
+    const status: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+    const tripId = crypto.randomUUID();
+
+    const trip: Trip = {
+      id: tripId,
+      title: input.title.trim(),
+      slug: finalSlug,
+      short_description: input.short_description.trim(),
+      description: input.description.trim(),
+      cover_image_url: input.cover_image_url ?? null,
+      province: input.province.trim(),
+      category: input.category.trim(),
+      duration_label: input.duration_label.trim(),
+      duration_hours: input.duration_hours ?? null,
+      budget_min: input.budget_min ?? null,
+      budget_max: input.budget_max ?? null,
+      travel_mode: input.travel_mode ?? null,
+      travel_mode_note: input.travel_mode_note ?? null,
+      status,
+      is_sample: false,
+      created_by: userId,
+      rejection_reason: null,
+      submitted_at: status === "pending_review" ? now : null,
+      reviewed_at: null,
+      reviewed_by: null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    state.trips.push(trip);
+
+    const stops: TripStop[] = input.stops.map((stopInput, index) => ({
+      id: crypto.randomUUID(),
+      trip_id: tripId,
+      place_name: stopInput.place_name.trim(),
+      description: stopInput.description.trim(),
+      latitude: stopInput.latitude,
+      longitude: stopInput.longitude,
+      sequence: index + 1,
+      image_url: stopInput.image_url ?? null,
+      estimated_minutes: stopInput.estimated_minutes ?? null,
+      suggested_arrival_time: stopInput.suggested_arrival_time ?? null,
+      estimated_cost: stopInput.estimated_cost ?? null,
+      notes: stopInput.notes ?? null,
+      created_at: now,
+      updated_at: now,
+    }));
+
+    state.trip_stops.push(...stops);
+    this.writeState(state);
+
+    return { ...trip, stops };
+  }
+
+  async updateSubmission(
+    userId: string,
+    tripId: string,
+    input: TripSubmissionInput
+  ): Promise<TripWithStops> {
+    const state = this.readState();
+    const trip = state.trips.find((t) => t.id === tripId);
+    if (!trip) {
+      throw new NotFoundError("Submission not found.");
+    }
+    if (trip.created_by !== userId) {
+      throw new ForbiddenError("You can only edit your own submissions.");
+    }
+    if (trip.status === "published") {
+      throw new ForbiddenError("Published trips cannot be edited via submission workflow.");
+    }
+
+    const now = new Date().toISOString();
+    const nextStatus: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+
+    trip.title = input.title.trim();
+    trip.short_description = input.short_description.trim();
+    trip.description = input.description.trim();
+    trip.cover_image_url = input.cover_image_url ?? null;
+    trip.province = input.province.trim();
+    trip.category = input.category.trim();
+    trip.duration_label = input.duration_label.trim();
+    trip.duration_hours = input.duration_hours ?? null;
+    trip.budget_min = input.budget_min ?? null;
+    trip.budget_max = input.budget_max ?? null;
+    trip.travel_mode = input.travel_mode ?? null;
+    trip.travel_mode_note = input.travel_mode_note ?? null;
+    trip.status = nextStatus;
+    trip.updated_at = now;
+    if (nextStatus === "pending_review") {
+      trip.submitted_at = now;
+      trip.rejection_reason = null;
+    }
+
+    state.trip_stops = state.trip_stops.filter((s) => s.trip_id !== tripId);
+    const stops: TripStop[] = input.stops.map((stopInput, index) => ({
+      id: crypto.randomUUID(),
+      trip_id: tripId,
+      place_name: stopInput.place_name.trim(),
+      description: stopInput.description.trim(),
+      latitude: stopInput.latitude,
+      longitude: stopInput.longitude,
+      sequence: index + 1,
+      image_url: stopInput.image_url ?? null,
+      estimated_minutes: stopInput.estimated_minutes ?? null,
+      suggested_arrival_time: stopInput.suggested_arrival_time ?? null,
+      estimated_cost: stopInput.estimated_cost ?? null,
+      notes: stopInput.notes ?? null,
+      created_at: now,
+      updated_at: now,
+    }));
+    state.trip_stops.push(...stops);
+
+    this.writeState(state);
+    return { ...trip, stops };
+  }
+
+  // --- Phase 2: Admin Moderation ---
+
+  async listPendingSubmissions(): Promise<TripListItem[]> {
+    const state = this.readState();
+    const pending = state.trips
+      .filter((t) => t.status === "pending_review")
+      .sort((a, b) => {
+        const timeA = a.submitted_at || a.created_at;
+        const timeB = b.submitted_at || b.created_at;
+        return timeA.localeCompare(timeB);
+      });
+
+    return pending.map((trip) => ({
+      ...trip,
+      stop_count: state.trip_stops.filter((s) => s.trip_id === trip.id).length,
+    }));
+  }
+
+  async reviewSubmission(
+    adminUserId: string,
+    tripId: string,
+    action: "approve" | "reject",
+    rejectionReason?: string | null
+  ): Promise<Trip> {
+    const state = this.readState();
+    const trip = state.trips.find((t) => t.id === tripId);
+    if (!trip) {
+      throw new NotFoundError("Submission not found.");
+    }
+    const now = new Date().toISOString();
+    if (action === "approve") {
+      trip.status = "published";
+      trip.reviewed_at = now;
+      trip.reviewed_by = adminUserId;
+      trip.rejection_reason = null;
+    } else {
+      trip.status = "rejected";
+      trip.reviewed_at = now;
+      trip.reviewed_by = adminUserId;
+      trip.rejection_reason = rejectionReason?.trim() || "Rejected by administrator.";
+    }
+    trip.updated_at = now;
+    this.writeState(state);
+    return structuredClone(trip);
   }
 
   async resetToSeedData(): Promise<void> {
@@ -672,7 +1095,8 @@ export class SupabaseTripRepository implements TripRepository {
         duration_hours: input.duration_hours ?? null,
         budget_min: input.budget_min ?? null,
         budget_max: input.budget_max ?? null,
-        travel_mode: input.travel_mode,
+        travel_mode: input.travel_mode ?? null,
+      travel_mode_note: input.travel_mode_note ?? null,
         status: input.status,
         is_sample: input.is_sample ?? false,
       })
@@ -710,7 +1134,8 @@ export class SupabaseTripRepository implements TripRepository {
         duration_hours: input.duration_hours ?? null,
         budget_min: input.budget_min ?? null,
         budget_max: input.budget_max ?? null,
-        travel_mode: input.travel_mode,
+        travel_mode: input.travel_mode ?? null,
+      travel_mode_note: input.travel_mode_note ?? null,
         status: input.status,
       })
       .eq("id", tripId)
@@ -849,6 +1274,471 @@ export class SupabaseTripRepository implements TripRepository {
 
     if (error) throw new Error(error.message);
     return (data ?? []) as TripStop[];
+  }
+
+  // --- Phase 2: Auth & Profiles (Supabase) ---
+
+  async findUserByEmail(email: string): Promise<UserRecord | null> {
+    const { data, error } = await this.adminClient.auth.admin.listUsers();
+    if (error || !data) return null;
+    const normalized = email.trim().toLowerCase();
+    const user = data.users.find((u) => u.email?.toLowerCase() === normalized);
+    if (!user) return null;
+    return {
+      id: user.id,
+      email: user.email!,
+      password_hash: "",
+      salt: "",
+      created_at: user.created_at,
+      updated_at: user.updated_at || user.created_at,
+    };
+  }
+
+  async findUserById(id: string): Promise<UserRecord | null> {
+    const { data, error } = await this.adminClient.auth.admin.getUserById(id);
+    if (error || !data.user) return null;
+    const u = data.user;
+    return {
+      id: u.id,
+      email: u.email!,
+      password_hash: "",
+      salt: "",
+      created_at: u.created_at,
+      updated_at: u.updated_at || u.created_at,
+    };
+  }
+
+  async createUser(
+    email: string,
+    passwordHash: string,
+    _salt: string,
+    displayName: string,
+    role: UserRole = "user"
+  ): Promise<{ user: UserRecord; profile: Profile }> {
+    const normalized = email.trim().toLowerCase();
+    const { data, error } = await this.adminClient.auth.admin.createUser({
+      email: normalized,
+      password: passwordHash,
+      email_confirm: true,
+    });
+    if (error) {
+      if (error.message.toLowerCase().includes("already registered")) {
+        throw new DuplicateEmailError(normalized);
+      }
+      throw new Error(error.message);
+    }
+
+    const now = new Date().toISOString();
+    const profile: Profile = {
+      user_id: data.user.id,
+      display_name: displayName.trim(),
+      avatar_url: null,
+      role,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const { error: profileErr } = await this.adminClient.from("profiles").upsert(profile);
+    if (profileErr) throw new Error(profileErr.message);
+
+    const userRecord: UserRecord = {
+      id: data.user.id,
+      email: normalized,
+      password_hash: "",
+      salt: "",
+      created_at: now,
+      updated_at: now,
+    };
+
+    return { user: userRecord, profile };
+  }
+
+  async getProfile(userId: string): Promise<Profile | null> {
+    const { data, error } = await this.adminClient
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data as Profile | null;
+  }
+
+  async updateProfile(
+    userId: string,
+    input: { display_name?: string; avatar_url?: string | null }
+  ): Promise<Profile> {
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (input.display_name !== undefined) updatePayload.display_name = input.display_name.trim();
+    if (input.avatar_url !== undefined) updatePayload.avatar_url = input.avatar_url;
+
+    const { data, error } = await this.adminClient
+      .from("profiles")
+      .update(updatePayload)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as Profile;
+  }
+
+  // --- Phase 2: Saved Trips (Supabase) ---
+
+  async saveTrip(userId: string, tripId: string): Promise<SavedTrip> {
+    const { data: trip, error: tripErr } = await this.adminClient
+      .from("trips")
+      .select("id, status")
+      .eq("id", tripId)
+      .maybeSingle();
+
+    if (tripErr) throw new Error(tripErr.message);
+    if (!trip || trip.status !== "published") {
+      throw new NotFoundError("Trip not found or is not published.");
+    }
+
+    const { data, error } = await this.adminClient
+      .from("saved_trips")
+      .insert({ user_id: userId, trip_id: tripId })
+      .select("*")
+      .single();
+
+    if (error) {
+      if (error.code === "23505" || error.message.toLowerCase().includes("unique")) {
+        throw new DuplicateSaveError();
+      }
+      throw new Error(error.message);
+    }
+
+    return data as SavedTrip;
+  }
+
+  async unsaveTrip(userId: string, tripId: string): Promise<void> {
+    const { error } = await this.adminClient
+      .from("saved_trips")
+      .delete()
+      .eq("user_id", userId)
+      .eq("trip_id", tripId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async isTripSaved(userId: string, tripId: string): Promise<boolean> {
+    const { data, error } = await this.adminClient
+      .from("saved_trips")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("trip_id", tripId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return !!data;
+  }
+
+  async listSavedTripIds(userId: string): Promise<string[]> {
+    const { data, error } = await this.adminClient
+      .from("saved_trips")
+      .select("trip_id")
+      .eq("user_id", userId);
+
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => String(row.trip_id));
+  }
+
+  async listSavedTrips(userId: string): Promise<TripListItem[]> {
+    const { data: savedRows, error: savedErr } = await this.adminClient
+      .from("saved_trips")
+      .select("trip_id, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (savedErr) throw new Error(savedErr.message);
+    if (!savedRows || savedRows.length === 0) return [];
+
+    const tripIds = savedRows.map((r) => r.trip_id);
+    const { data: tripsData, error: tripsErr } = await this.adminClient
+      .from("trips")
+      .select("*, trip_stops(count)")
+      .in("id", tripIds)
+      .eq("status", "published");
+
+    if (tripsErr) throw new Error(tripsErr.message);
+
+    const tripMap = new Map((tripsData ?? []).map((t) => [t.id, t]));
+    const result: TripListItem[] = [];
+
+    for (const row of savedRows) {
+      const trip = tripMap.get(row.trip_id);
+      if (trip) {
+        const count = (trip.trip_stops as Array<{ count: number }>)?.[0]?.count ?? 0;
+        const { trip_stops: _ignored, ...rest } = trip;
+        void _ignored;
+        result.push({
+          ...(rest as unknown as Trip),
+          duration_hours: rest.duration_hours !== null ? Number(rest.duration_hours) : null,
+          stop_count: count,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  // --- Phase 2: Community Submissions (Supabase) ---
+
+  async listUserSubmissions(userId: string): Promise<TripListItem[]> {
+    const { data, error } = await this.adminClient
+      .from("trips")
+      .select("*, trip_stops(count)")
+      .eq("created_by", userId)
+      .order("updated_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    return (data ?? []).map((row: Record<string, unknown>) => {
+      const count = (row.trip_stops as Array<{ count: number }>)?.[0]?.count ?? 0;
+      const { trip_stops: _ignored, ...rest } = row;
+      void _ignored;
+      return {
+        ...(rest as unknown as Trip),
+        duration_hours: rest.duration_hours !== null ? Number(rest.duration_hours) : null,
+        stop_count: count,
+      };
+    });
+  }
+
+  async getUserSubmissionById(userId: string, tripId: string): Promise<TripWithStops | null> {
+    const { data: trip, error } = await this.adminClient
+      .from("trips")
+      .select("*")
+      .eq("id", tripId)
+      .eq("created_by", userId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!trip) return null;
+
+    const { data: stops, error: stopsError } = await this.adminClient
+      .from("trip_stops")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("sequence", { ascending: true });
+
+    if (stopsError) throw new Error(stopsError.message);
+
+    return {
+      ...(trip as Trip),
+      duration_hours: trip.duration_hours !== null ? Number(trip.duration_hours) : null,
+      stops: (stops ?? []) as TripStop[],
+    };
+  }
+
+  async createSubmission(userId: string, input: TripSubmissionInput): Promise<TripWithStops> {
+    let baseSlug = input.slug?.trim() ? slugify(input.slug) : slugify(input.title);
+    if (!baseSlug) baseSlug = `trip-${Date.now()}`;
+    let finalSlug = baseSlug;
+
+    const { data: existing } = await this.adminClient
+      .from("trips")
+      .select("id")
+      .eq("slug", finalSlug)
+      .maybeSingle();
+
+    if (existing) {
+      finalSlug = `${baseSlug}-${Date.now().toString(36)}`;
+    }
+
+    const now = new Date().toISOString();
+    const status: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+
+    const { data: createdTrip, error: tripErr } = await this.adminClient
+      .from("trips")
+      .insert({
+        title: input.title.trim(),
+        slug: finalSlug,
+        short_description: input.short_description.trim(),
+        description: input.description.trim(),
+        cover_image_url: input.cover_image_url ?? null,
+        province: input.province.trim(),
+        category: input.category.trim(),
+        duration_label: input.duration_label.trim(),
+        duration_hours: input.duration_hours ?? null,
+        budget_min: input.budget_min ?? null,
+        budget_max: input.budget_max ?? null,
+        travel_mode: input.travel_mode ?? null,
+      travel_mode_note: input.travel_mode_note ?? null,
+        status,
+        is_sample: false,
+        created_by: userId,
+        rejection_reason: null,
+        submitted_at: status === "pending_review" ? now : null,
+      })
+      .select("*")
+      .single();
+
+    if (tripErr) throw new Error(tripErr.message);
+
+    const stopsPayload = input.stops.map((stopInput, index) => ({
+      trip_id: createdTrip.id,
+      place_name: stopInput.place_name.trim(),
+      description: stopInput.description.trim(),
+      latitude: stopInput.latitude,
+      longitude: stopInput.longitude,
+      sequence: index + 1,
+      image_url: stopInput.image_url ?? null,
+      estimated_minutes: stopInput.estimated_minutes ?? null,
+      suggested_arrival_time: stopInput.suggested_arrival_time ?? null,
+      estimated_cost: stopInput.estimated_cost ?? null,
+      notes: stopInput.notes ?? null,
+    }));
+
+    const { data: createdStops, error: stopsErr } = await this.adminClient
+      .from("trip_stops")
+      .insert(stopsPayload)
+      .select("*")
+      .order("sequence", { ascending: true });
+
+    if (stopsErr) throw new Error(stopsErr.message);
+
+    return {
+      ...(createdTrip as Trip),
+      stops: (createdStops ?? []) as TripStop[],
+    };
+  }
+
+  async updateSubmission(
+    userId: string,
+    tripId: string,
+    input: TripSubmissionInput
+  ): Promise<TripWithStops> {
+    const { data: existing, error: findErr } = await this.adminClient
+      .from("trips")
+      .select("*")
+      .eq("id", tripId)
+      .maybeSingle();
+
+    if (findErr) throw new Error(findErr.message);
+    if (!existing) throw new NotFoundError("Submission not found.");
+    if (existing.created_by !== userId) {
+      throw new ForbiddenError("You can only edit your own submissions.");
+    }
+    if (existing.status === "published") {
+      throw new ForbiddenError("Published trips cannot be edited via submission workflow.");
+    }
+
+    const now = new Date().toISOString();
+    const nextStatus: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+
+    const { data: updatedTrip, error: updateErr } = await this.adminClient
+      .from("trips")
+      .update({
+        title: input.title.trim(),
+        short_description: input.short_description.trim(),
+        description: input.description.trim(),
+        cover_image_url: input.cover_image_url ?? null,
+        province: input.province.trim(),
+        category: input.category.trim(),
+        duration_label: input.duration_label.trim(),
+        duration_hours: input.duration_hours ?? null,
+        budget_min: input.budget_min ?? null,
+        budget_max: input.budget_max ?? null,
+        travel_mode: input.travel_mode ?? null,
+      travel_mode_note: input.travel_mode_note ?? null,
+        status: nextStatus,
+        updated_at: now,
+        submitted_at: nextStatus === "pending_review" ? now : existing.submitted_at,
+        rejection_reason: nextStatus === "pending_review" ? null : existing.rejection_reason,
+      })
+      .eq("id", tripId)
+      .select("*")
+      .single();
+
+    if (updateErr) throw new Error(updateErr.message);
+
+    await this.adminClient.from("trip_stops").delete().eq("trip_id", tripId);
+
+    const stopsPayload = input.stops.map((stopInput, index) => ({
+      trip_id: tripId,
+      place_name: stopInput.place_name.trim(),
+      description: stopInput.description.trim(),
+      latitude: stopInput.latitude,
+      longitude: stopInput.longitude,
+      sequence: index + 1,
+      image_url: stopInput.image_url ?? null,
+      estimated_minutes: stopInput.estimated_minutes ?? null,
+      suggested_arrival_time: stopInput.suggested_arrival_time ?? null,
+      estimated_cost: stopInput.estimated_cost ?? null,
+      notes: stopInput.notes ?? null,
+    }));
+
+    const { data: createdStops, error: stopsErr } = await this.adminClient
+      .from("trip_stops")
+      .insert(stopsPayload)
+      .select("*")
+      .order("sequence", { ascending: true });
+
+    if (stopsErr) throw new Error(stopsErr.message);
+
+    return {
+      ...(updatedTrip as Trip),
+      stops: (createdStops ?? []) as TripStop[],
+    };
+  }
+
+  // --- Phase 2: Admin Moderation (Supabase) ---
+
+  async listPendingSubmissions(): Promise<TripListItem[]> {
+    const { data, error } = await this.adminClient
+      .from("trips")
+      .select("*, trip_stops(count)")
+      .eq("status", "pending_review")
+      .order("submitted_at", { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    return (data ?? []).map((row: Record<string, unknown>) => {
+      const count = (row.trip_stops as Array<{ count: number }>)?.[0]?.count ?? 0;
+      const { trip_stops: _ignored, ...rest } = row;
+      void _ignored;
+      return {
+        ...(rest as unknown as Trip),
+        duration_hours: rest.duration_hours !== null ? Number(rest.duration_hours) : null,
+        stop_count: count,
+      };
+    });
+  }
+
+  async reviewSubmission(
+    adminUserId: string,
+    tripId: string,
+    action: "approve" | "reject",
+    rejectionReason?: string | null
+  ): Promise<Trip> {
+    const now = new Date().toISOString();
+    const isUuid =
+      typeof adminUserId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUserId);
+
+    const updatePayload: Record<string, unknown> = {
+      status: action === "approve" ? "published" : "rejected",
+      reviewed_at: now,
+      reviewed_by: isUuid ? adminUserId : null,
+      rejection_reason:
+        action === "reject" ? rejectionReason?.trim() || "Rejected by administrator." : null,
+      updated_at: now,
+    };
+
+    const { data, error } = await this.adminClient
+      .from("trips")
+      .update(updatePayload)
+      .eq("id", tripId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as Trip;
   }
 
   async resetToSeedData(): Promise<void> {

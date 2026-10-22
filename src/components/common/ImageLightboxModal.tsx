@@ -85,7 +85,7 @@ export function ImageLightboxModal({
     >
       {/* Top Bar: Title, Count & Close Button */}
       <div
-        className="z-[10000] flex w-full max-w-7xl items-center justify-between px-2 pt-2"
+        className="z-[10000] flex min-h-[52px] w-full max-w-7xl items-center justify-between px-2 pt-2"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3">
@@ -140,31 +140,37 @@ export function ImageLightboxModal({
           key={currentImage.url}
           src={currentImage.url}
           alt={currentImage.title}
-          className="max-h-[82vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl transition-all duration-300"
+          className="max-h-[82vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl transition-opacity duration-200"
         />
-
-        {/* Carousel controls in Lightbox */}
-        {images.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={handlePrev}
-              aria-label="Previous photo"
-              className="absolute left-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/50 bg-black/60 text-white backdrop-blur-md transition hover:scale-110 hover:border-white hover:bg-black/80 active:scale-95 sm:left-6 sm:h-14 sm:w-14"
-            >
-              <ChevronLeft className="h-7 w-7 sm:h-8 sm:w-8" />
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              aria-label="Next photo"
-              className="absolute right-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/50 bg-black/60 text-white backdrop-blur-md transition hover:scale-110 hover:border-white hover:bg-black/80 active:scale-95 sm:right-6 sm:h-14 sm:w-14"
-            >
-              <ChevronRight className="h-7 w-7 sm:h-8 sm:w-8" />
-            </button>
-          </>
-        )}
       </div>
+
+      {/* Fixed Navigation Buttons: Anchored directly to screen viewport to eliminate any jitter/twitching on click */}
+      {images.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrev();
+            }}
+            aria-label="Previous photo"
+            className="fixed left-3 top-1/2 z-[10002] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/60 bg-black/70 text-white backdrop-blur-md transition-colors duration-150 hover:border-white hover:bg-black/90 active:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-white select-none sm:left-6 sm:h-14 sm:w-14"
+          >
+            <ChevronLeft className="h-7 w-7 sm:h-8 sm:w-8" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNext();
+            }}
+            aria-label="Next photo"
+            className="fixed right-3 top-1/2 z-[10002] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/60 bg-black/70 text-white backdrop-blur-md transition-colors duration-150 hover:border-white hover:bg-black/90 active:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-white select-none sm:right-6 sm:h-14 sm:w-14"
+          >
+            <ChevronRight className="h-7 w-7 sm:h-8 sm:w-8" />
+          </button>
+        </>
+      )}
 
       {/* Bottom Thumbnail / Dot Indicator Bar */}
       {images.length > 1 && (

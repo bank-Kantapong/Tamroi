@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Prompt, IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import { LanguageProvider } from "@/components/LanguageProvider";
+import { AuthProvider } from "@/components/AuthProvider";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
@@ -38,11 +39,13 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning className="flex min-h-screen flex-col font-sans">
         <LanguageProvider>
-          <Navbar />
-          <main id="main-content" className="flex-1">
-            {children}
-          </main>
-          <Footer />
+          <AuthProvider>
+            <Navbar />
+            <main id="main-content" className="flex-1">
+              {children}
+            </main>
+            <Footer />
+          </AuthProvider>
         </LanguageProvider>
       </body>
     </html>

@@ -12,20 +12,16 @@ import {
   ListOrdered,
   Sparkles,
 } from "lucide-react";
-import type { TripStop, TripWithStops } from "@/types/trip";
-import {
-  buildTripGoogleMapsLinks,
-  formatCoordinatePair,
-} from "@/lib/google-maps";
+import type { TripWithStops } from "@/types/trip";
+import { buildTripGoogleMapsLinks } from "@/lib/google-maps";
 import { calculateItineraryMetrics } from "@/lib/format-utils";
 import { useLanguage } from "@/components/LanguageProvider";
 import { localizeTripWithStops } from "@/lib/i18n-trips";
 import { useTripDetailStore } from "@/stores/useTripDetailStore";
-import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { TripScrapbookHeader } from "./TripScrapbookHeader";
-import { TripStopThumbnails } from "./TripStopThumbnails";
 import { TripStopInspector } from "./TripStopInspector";
 import { TripStopListItem } from "./TripStopListItem";
+import { SaveTripButton } from "./SaveTripButton";
 
 const TripLeafletMap = dynamic(() => import("./TripLeafletMap"), {
   ssr: false,
@@ -68,13 +64,6 @@ export function TripDetailView({
     resetState,
   } = useTripDetailStore();
 
-  // Custom Hook for Copy Coordinates with Feedback
-  const {
-    copiedId: copiedStopId,
-    copyErrorId: copyErrorStopId,
-    copy: copyCoordinates,
-  } = useCopyFeedback({ resetDelayMs: 2500 });
-
   // Initialize/Reset store on trip mount
   const firstStopId = orderedStops[0]?.id ?? null;
   useEffect(() => {
@@ -90,7 +79,7 @@ export function TripDetailView({
 
   const googleMapsResult = buildTripGoogleMapsLinks(
     orderedStops,
-    trip.travel_mode
+    trip.travel_mode || "driving"
   );
 
   const modeLabel =
@@ -100,16 +89,11 @@ export function TripDetailView({
         ? t.card.travelMode.walking
         : trip.travel_mode === "transit"
           ? t.card.travelMode.transit
-          : trip.travel_mode;
-
-  const handleCopyCoordinates = async (stop: TripStop) => {
-    const text = formatCoordinatePair(stop.latitude, stop.longitude, 6);
-    await copyCoordinates(stop.id, text);
-  };
-
-  const previewStops = orderedStops
-    .filter((stop) => Boolean(stop.image_url))
-    .slice(0, 3);
+          : trip.travel_mode === "bicycling"
+            ? t.card.travelMode.bicycling
+            : trip.travel_mode === "other"
+              ? trip.travel_mode_note || "อื่นๆ (Other)"
+              : "";
 
   const totalPhotos =
     (trip.cover_image_url ? 1 : 0) +
@@ -127,15 +111,19 @@ export function TripDetailView({
           <span>{t.detail.backHome}</span>
         </Link>
 
-        {isAdminPreview && (
-          <div
-            role="status"
-            className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--color-coral-border-alt)] bg-[var(--color-coral-bg-alt)] px-4 py-1.5 text-xs font-black text-[var(--color-coral-text-dark)] shadow-sm"
-          >
-            <ShieldAlert className="h-4 w-4 text-[var(--color-coral-accent)]" aria-hidden="true" />
-            <span>{t.detail.adminPreviewBadge} {trip.status}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <SaveTripButton tripId={trip.id} variant="detail" />
+
+          {isAdminPreview && (
+            <div
+              role="status"
+              className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--color-coral-border-alt)] bg-[var(--color-coral-bg-alt)] px-4 py-1.5 text-xs font-black text-[var(--color-coral-text-dark)] shadow-sm"
+            >
+              <ShieldAlert className="h-4 w-4 text-[var(--color-coral-accent)]" aria-hidden="true" />
+              <span>{t.detail.adminPreviewBadge} {trip.status}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Cute Sticky-Note Sample Data Notice */}
@@ -168,14 +156,6 @@ export function TripDetailView({
         onCoverError={() => setCoverFailed(true)}
         locale={locale}
         t={t}
-      />
-
-      {/* 3 Small Scrapbook Stop Cards Below Header Subcomponent */}
-      <TripStopThumbnails
-        previewStops={previewStops}
-        selectedStopId={selectedStopId}
-        onSelectStop={(id) => selectStop(id, true)}
-        locale={locale}
       />
 
       {/* Mobile Quick Jump Pills (Map vs Stop List) */}
@@ -248,9 +228,6 @@ export function TripDetailView({
                   failedStopImages={failedStopImages}
                   onImageError={markStopImageFailed}
                   onSelectStop={(id) => selectStop(id, true)}
-                  onCopyCoordinates={handleCopyCoordinates}
-                  copiedStopId={copiedStopId}
-                  copyErrorStopId={copyErrorStopId}
                   t={t}
                 />
               )}
@@ -280,13 +257,11 @@ export function TripDetailView({
                     stop={stop}
                     index={idx}
                     isSelected={selectedStop?.id === stop.id}
-                    isCopied={copiedStopId === stop.id}
                     badgeColorClass={
                       STOP_NUMBER_COLORS[idx % STOP_NUMBER_COLORS.length]
                     }
                     travelMode={trip.travel_mode}
                     onSelectStop={selectStop}
-                    onCopyCoordinates={handleCopyCoordinates}
                     t={t}
                   />
                 ))}

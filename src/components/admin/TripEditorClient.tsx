@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -27,6 +27,7 @@ import { slugify } from "@/lib/validation";
 import { formatCoordinatePair } from "@/lib/google-maps";
 import { useFormValidityBridge } from "@/components/FormValidityBridge";
 import { CustomDropdown, DropdownOption } from "@/components/CustomDropdown";
+import { ImageUploadField, MultiImageUploadField } from "@/components/common";
 
 interface TripEditorClientProps {
   mode: "create" | "edit";
@@ -302,11 +303,8 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
         latitude: Number(stopForm.latitude),
         longitude: Number(stopForm.longitude),
         image_url: stopForm.image_url || null,
-        estimated_minutes:
-          stopForm.estimated_minutes !== ""
-            ? Number(stopForm.estimated_minutes)
-            : null,
-        suggested_arrival_time: stopForm.suggested_arrival_time || null,
+        estimated_minutes: null,
+        suggested_arrival_time: null,
         estimated_cost:
           stopForm.estimated_cost !== "" ? Number(stopForm.estimated_cost) : null,
         notes: stopForm.notes || null,
@@ -654,7 +652,7 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
                 <CustomDropdown
                   id="trip-travel-mode"
                   name="travel_mode"
-                  value={travelMode}
+                  value={travelMode || "driving"}
                   onChange={(v) => setTravelMode(v as TravelMode)}
                   options={TRAVEL_MODE_OPTIONS}
                   ariaLabel="Travel Mode"
@@ -739,17 +737,12 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="trip-cover-url" className={labelClass}>
-                URL รูปปกทริป (เว้นว่างไว้เพื่อใช้ Placeholder ได้)
-              </label>
-              <input
-                id="trip-cover-url"
-                name="cover_image_url"
-                type="text"
+              <ImageUploadField
+                label="รูปปกทริป (Cover Image)"
                 value={coverImageUrl}
-                onChange={(e) => setCoverImageUrl(e.target.value)}
-                placeholder="/images/samples/bangkok-riverside.svg หรือ https://..."
-                className={inputClass}
+                onChange={setCoverImageUrl}
+                aspectRatio="aspect-[16/10]"
+                helperText="เว้นว่างไว้เพื่อใช้ Placeholder ได้ หรืออัปโหลดรูปภาพใหม่ (ย่อไฟล์คมชัดอัตโนมัติ)"
               />
             </div>
 
@@ -882,12 +875,6 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
                             <span className="font-mono font-semibold text-[var(--color-brand-primary)]">
                               {formatCoordinatePair(stop.latitude, stop.longitude, 5)}
                             </span>
-                            {stop.suggested_arrival_time && (
-                              <span>🕒 {stop.suggested_arrival_time}</span>
-                            )}
-                            {stop.estimated_minutes !== null && (
-                              <span>~{stop.estimated_minutes} นาที</span>
-                            )}
                             {stop.estimated_cost !== null && (
                               <span>฿{stop.estimated_cost}</span>
                             )}
@@ -1055,82 +1042,47 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
-                <div>
-                  <label htmlFor="stop-arrival" className={labelClass}>
-                    เวลาแนะนำ
-                  </label>
-                  <input
-                    id="stop-arrival"
-                    type="text"
-                    value={stopForm.suggested_arrival_time}
-                    onChange={(e) =>
-                      setStopForm((s) => ({
-                        ...s,
-                        suggested_arrival_time: e.target.value,
-                      }))
-                    }
-                    placeholder="09:30"
-                    className={`${inputClass} px-2.5`}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="stop-minutes" className={labelClass}>
-                    เวลาแวะ (นาที)
-                  </label>
-                  <input
-                    id="stop-minutes"
-                    type="number"
-                    min="0"
-                    step="5"
-                    value={stopForm.estimated_minutes}
-                    onChange={(e) =>
-                      setStopForm((s) => ({
-                        ...s,
-                        estimated_minutes: e.target.value,
-                      }))
-                    }
-                    placeholder="45"
-                    className={`${inputClass} px-2.5`}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="stop-cost" className={labelClass}>
-                    ค่าใช้จ่าย (฿)
-                  </label>
-                  <input
-                    id="stop-cost"
-                    type="number"
-                    min="0"
-                    step="10"
-                    value={stopForm.estimated_cost}
-                    onChange={(e) =>
-                      setStopForm((s) => ({
-                        ...s,
-                        estimated_cost: e.target.value,
-                      }))
-                    }
-                    placeholder="100"
-                    className={`${inputClass} px-2.5`}
-                  />
-                </div>
+              <div>
+                <label htmlFor="stop-cost" className={labelClass}>
+                  ค่าใช้จ่ายประมาณการ (฿) (ไม่บังคับ)
+                </label>
+                <input
+                  id="stop-cost"
+                  type="number"
+                  min="0"
+                  step="10"
+                  value={stopForm.estimated_cost}
+                  onChange={(e) =>
+                    setStopForm((s) => ({
+                      ...s,
+                      estimated_cost: e.target.value,
+                    }))
+                  }
+                  placeholder="เช่น 100"
+                  className={inputClass}
+                />
               </div>
 
               <div>
-                <label htmlFor="stop-image" className={labelClass}>
-                  URL รูปภาพจุดแวะ (ไม่บังคับ)
-                </label>
-                <input
-                  id="stop-image"
-                  type="text"
-                  value={stopForm.image_url}
-                  onChange={(e) =>
-                    setStopForm((s) => ({ ...s, image_url: e.target.value }))
+                <MultiImageUploadField
+                  images={
+                    stopForm.image_url
+                      ? stopForm.image_url
+                          .split(/[\n,;]+/)
+                          .map((u) => u.trim())
+                          .filter(Boolean)
+                      : []
                   }
-                  placeholder="/images/samples/bangkok-riverside.svg หรือ https://..."
-                  className={inputClass}
+                  onChange={(newImages) =>
+                    setStopForm((s) => ({
+                      ...s,
+                      image_url: newImages.join("\n"),
+                    }))
+                  }
+                  label="รูปถ่ายจุดแวะ (Stop Photos)"
+                  helperText="สามารถอัปโหลดได้หลายรูป (ครอบตัด 3:4 และย่อขนาด Full HD ให้อัตโนมัติ)"
+                  title={stopForm.place_name || "จุดแวะ"}
+                  province={province || "ประเทศไทย"}
                 />
               </div>
 

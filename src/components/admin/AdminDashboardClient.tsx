@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -178,6 +178,14 @@ export function AdminDashboardClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            href="/admin/moderation"
+            className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-extrabold text-amber-900 shadow-sm transition hover:bg-amber-100"
+          >
+            <CheckCircle2 className="h-4 w-4 text-amber-600" aria-hidden="true" />
+            <span>คิวตรวจสอบ (Moderation)</span>
+          </Link>
+
           <Link
             href="/admin/trips/new"
             className="cute-yellow-btn inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-extrabold"

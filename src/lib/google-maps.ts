@@ -66,10 +66,14 @@ export function buildStopNavigationUrl(
   }
 
   const destinationCoord = `${Number(stop.latitude.toFixed(6))},${Number(stop.longitude.toFixed(6))}`;
+  const validGoogleMode =
+    travelMode === "walking" || travelMode === "transit" || travelMode === "bicycling"
+      ? travelMode
+      : "driving";
   const params = new URLSearchParams({
     api: "1",
     destination: destinationCoord,
-    travelmode: travelMode,
+    travelmode: validGoogleMode,
   });
 
   return `https://www.google.com/maps/dir/?${params.toString()}`;
@@ -93,11 +97,16 @@ function buildSegmentUrl(
   const origin = `${Number(first.latitude.toFixed(6))},${Number(first.longitude.toFixed(6))}`;
   const destination = `${Number(last.latitude.toFixed(6))},${Number(last.longitude.toFixed(6))}`;
 
+  const validGoogleMode =
+    travelMode === "walking" || travelMode === "transit" || travelMode === "bicycling"
+      ? travelMode
+      : "driving";
+
   const params = new URLSearchParams({
     api: "1",
     origin,
     destination,
-    travelmode: travelMode,
+    travelmode: validGoogleMode,
   });
 
   if (intermediate.length > 0) {

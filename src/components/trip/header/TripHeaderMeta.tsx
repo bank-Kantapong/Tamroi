@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Star, Utensils, Car } from "lucide-react";
+import { Star, Utensils, Car, Footprints, Train, Bike, Compass } from "lucide-react";
 import type { TripWithStops } from "@/types/trip";
 import { ScrapbookCurveCyan, RisingSunDoodle } from "@/components/illustrations";
 
@@ -11,7 +11,19 @@ interface TripHeaderMetaProps {
   locale: "th" | "en";
 }
 
+const TRAVEL_MODE_ICONS = {
+  driving: Car,
+  walking: Footprints,
+  transit: Train,
+  bicycling: Bike,
+  other: Compass,
+};
+
 export function TripHeaderMeta({ trip, modeLabel, locale }: TripHeaderMetaProps) {
+  const ModeIcon = trip.travel_mode
+    ? (TRAVEL_MODE_ICONS[trip.travel_mode as keyof typeof TRAVEL_MODE_ICONS] ?? Compass)
+    : Car;
+
   return (
     <div className="relative">
       <div className="flex flex-wrap items-center gap-2">
@@ -23,10 +35,12 @@ export function TripHeaderMeta({ trip, modeLabel, locale }: TripHeaderMetaProps)
           <Utensils className="h-3.5 w-3.5 text-[var(--color-brand-tag)]" aria-hidden="true" />
           <span>{trip.category}</span>
         </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-mint-bg)] px-3 py-1 text-xs font-extrabold text-[var(--color-mint-text-dark)]">
-          <Car className="h-3.5 w-3.5 text-[var(--color-mint-text-dark)]" aria-hidden="true" />
-          <span>{modeLabel}</span>
-        </span>
+        {modeLabel && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-mint-bg)] px-3 py-1 text-xs font-extrabold text-[var(--color-mint-text-dark)]">
+            <ModeIcon className="h-3.5 w-3.5 text-[var(--color-mint-text-dark)]" aria-hidden="true" />
+            <span>{modeLabel}</span>
+          </span>
+        )}
       </div>
 
       {/* Floating Tilted Handwritten Note on the Right */}

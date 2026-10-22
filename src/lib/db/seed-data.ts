@@ -1,8 +1,11 @@
-import type { Trip, TripStop } from "../../types/trip";
+import type { Profile, SavedTrip, Trip, TripStop, UserRecord } from "../../types/trip";
 
 export interface SeedDatabaseState {
   trips: Trip[];
   trip_stops: TripStop[];
+  users: UserRecord[];
+  profiles: Profile[];
+  saved_trips: SavedTrip[];
 }
 
 export const INITIAL_SEED_DATA: SeedDatabaseState = {
@@ -564,4 +567,7 @@ export const INITIAL_SEED_DATA: SeedDatabaseState = {
       updated_at: "2026-10-22T08:00:00.000Z",
     },
   ],
+  users: [],
+  profiles: [],
+  saved_trips: [],
 };

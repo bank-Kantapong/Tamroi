@@ -1,6 +1,5 @@
 "use client";
 
-import { MapPin } from "lucide-react";
 import type { TripStop } from "@/types/trip";
 import {
   DashedArrowRight,
@@ -49,7 +48,7 @@ export function TripStopThumbnails({
                 }`}
               >
                 {/* Thumbnail Image */}
-                <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl bg-[var(--color-bg-card-photo)]">
+                <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl bg-[var(--color-bg-card-photo)]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={stop.image_url!}
@@ -61,7 +60,7 @@ export function TripStopThumbnails({
                   />
                 </div>
 
-                {/* Stop Number Badge + Name + Time */}
+                {/* Stop Number Badge + Name */}
                 <div className="mt-2.5 flex items-center gap-2.5 px-1">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-teal-light)] text-xs font-black text-white shadow-sm">
                     {stop.sequence}
@@ -70,16 +69,9 @@ export function TripStopThumbnails({
                     <p className="truncate font-heading text-xs font-black text-[var(--color-brand-deep)] group-hover:text-[var(--color-brand-teal-light)] sm:text-sm">
                       {stop.place_name}
                     </p>
-                    {(stop.suggested_arrival_time || stop.estimated_minutes) && (
-                      <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-slate-500">
-                        <MapPin
-                          className="h-3 w-3 shrink-0 text-[var(--color-brand-cyan)]"
-                          aria-hidden="true"
-                        />
-                        <span>
-                          {stop.suggested_arrival_time ??
-                            `${stop.estimated_minutes} ${locale === "th" ? "นาที" : "min"}`}
-                        </span>
+                    {stop.estimated_cost && (
+                      <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                        ~฿{stop.estimated_cost}
                       </p>
                     )}
                   </div>
@@ -95,7 +87,7 @@ export function TripStopThumbnails({
         })}
       </div>
 
-      {/* Right-side Cute Camera Doodle & Handwritten Note ("1 วัน ก็เที่ยวได้ ครบเลย! ♡") */}
+      {/* Right-side Cute Camera Doodle & Handwritten Note */}
       <div className="relative hidden shrink-0 flex-col items-center pl-4 pr-2 lg:flex">
         {/* Cute Tilted Camera Illustration SVG */}
         <CuteCameraDoodle className="-mt-4 ml-12 h-11 w-14 rotate-12" />
@@ -116,4 +108,3 @@ export function TripStopThumbnails({
     </div>
   );
 }
-

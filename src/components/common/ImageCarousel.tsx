@@ -337,18 +337,18 @@ export function ImageCarousel({
                 onClick={handlePrev}
                 disabled={isShuffling}
                 aria-label="Previous photo card"
-                className="absolute left-1 top-1/2 z-40 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/90 bg-white/90 text-[var(--color-brand-deep)] shadow-[0_4px_14px_rgba(7,59,64,0.22)] backdrop-blur-md transition-all hover:scale-110 hover:bg-white hover:text-[var(--color-brand-primary)] active:scale-95 disabled:opacity-60 sm:-left-3"
+                className="absolute left-2.5 sm:left-3.5 top-1/2 z-40 flex h-9 w-9 sm:h-10 sm:w-10 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/95 bg-white/95 text-[var(--color-brand-deep)] shadow-[0_4px_14px_rgba(7,59,64,0.25)] backdrop-blur-md transition-colors duration-150 hover:bg-white hover:text-[var(--color-brand-primary)] active:bg-slate-100 disabled:opacity-50"
               >
-                <ChevronLeft className="h-6 w-6 drop-shadow-sm" />
+                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 drop-shadow-sm" />
               </button>
               <button
                 type="button"
                 onClick={handleNext}
                 disabled={isShuffling}
                 aria-label="Next photo card"
-                className="absolute right-1 top-1/2 z-40 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/90 bg-white/90 text-[var(--color-brand-deep)] shadow-[0_4px_14px_rgba(7,59,64,0.22)] backdrop-blur-md transition-all hover:scale-110 hover:bg-white hover:text-[var(--color-brand-primary)] active:scale-95 disabled:opacity-60 sm:-right-3"
+                className="absolute right-2.5 sm:right-3.5 top-1/2 z-40 flex h-9 w-9 sm:h-10 sm:w-10 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/95 bg-white/95 text-[var(--color-brand-deep)] shadow-[0_4px_14px_rgba(7,59,64,0.25)] backdrop-blur-md transition-colors duration-150 hover:bg-white hover:text-[var(--color-brand-primary)] active:bg-slate-100 disabled:opacity-50"
               >
-                <ChevronRight className="h-6 w-6 drop-shadow-sm" />
+                <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6 drop-shadow-sm" />
               </button>
             </>
           )}
