@@ -16,6 +16,15 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const repo = getTripRepository();
+    const profile = await repo.getProfile(session.user.id);
+    if (profile?.is_banned) {
+      return NextResponse.json(
+        {
+          error: `บัญชีของคุณถูกระงับการใช้งาน: ${profile.banned_reason || "ฝ่าฝืนกฎการใช้งานของชุมชน"}`,
+        },
+        { status: 403 }
+      );
+    }
     const submission = await repo.getUserSubmissionById(session.user.id, tripId);
     if (!submission) {
       return NextResponse.json({ error: "Submission not found" }, { status: 404 });
@@ -50,6 +59,15 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     const repo = getTripRepository();
+    const profile = await repo.getProfile(session.user.id);
+    if (profile?.is_banned) {
+      return NextResponse.json(
+        {
+          error: `บัญชีของคุณถูกระงับการใช้งาน: ${profile.banned_reason || "ฝ่าฝืนกฎการใช้งานของชุมชน"}`,
+        },
+        { status: 403 }
+      );
+    }
     try {
       const updated = await repo.updateSubmission(session.user.id, tripId, parsed.data);
       return NextResponse.json({

@@ -75,7 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { tripId } = await context.params;
 
   try {
-    const body = (await request.json()) as { status?: string };
+    const body = (await request.json()) as { status?: string; note?: string };
     if (!body.status || !TRIP_STATUSES.includes(body.status as TripStatus)) {
       return NextResponse.json(
         { error: "Status must be either 'draft' or 'published'." },
@@ -84,7 +84,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const repo = getTripRepository();
-    const updated = await repo.setTripStatus(tripId, body.status as TripStatus);
+    const updated =
+      body.status === "draft" && body.note && body.note.trim().length > 0
+        ? await repo.unpublishTripWithNote(tripId, body.note)
+        : await repo.setTripStatus(tripId, body.status as TripStatus);
     return NextResponse.json({ trip: updated });
   } catch (err) {
     if (err instanceof NotFoundError) {

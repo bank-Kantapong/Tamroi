@@ -15,6 +15,8 @@ import {
   verifyUserSessionToken,
 } from "@/lib/auth";
 import {
+  adminPostActionSchema,
+  adminUserActionSchema,
   moderationActionSchema,
   profileUpdateSchema,
   registerSchema,
@@ -195,7 +197,7 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
   });
 
   describe("4. Community Submissions Workflow & Privacy", () => {
-    it("creates submission defaulting to pending_review and isolates from public discovery", async () => {
+    it("creates submission as draft and isolates from public discovery", async () => {
       const { salt, hash } = hashPassword("Pass12345");
       const { user } = await repo.createUser("creator@example.com", hash, salt, "Trip Creator");
 
@@ -207,6 +209,7 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
         category: "Cafe & Views",
         duration_label: "Half Day (4 hrs)",
         travel_mode: "walking",
+        status: "draft",
         stops: [
           {
             place_name: "Thonglor Secret Deck",
@@ -223,7 +226,7 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
         ],
       });
 
-      expect(submission.status).toBe("pending_review");
+      expect(submission.status).toBe("draft");
       expect(submission.created_by).toBe(user.id);
       expect(submission.stops).toHaveLength(2);
 
@@ -238,6 +241,42 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
       // Must appear in creator's own submissions
       const userSubmissions = await repo.listUserSubmissions(user.id);
       expect(userSubmissions.some((t) => t.id === submission.id)).toBe(true);
+    });
+
+    it("creates submission directly published and makes it immediately live publicly", async () => {
+      const { salt, hash } = hashPassword("Pass12345");
+      const { user } = await repo.createUser("publisher@example.com", hash, salt, "Live Publisher");
+
+      const submission = await repo.createSubmission(user.id, {
+        title: "Nan Valley Scenic Loop",
+        short_description: "Scenic motorbike route through misty northern valleys.",
+        description: "Explore traditional Nan villages, salt pits, and temple viewpoints.",
+        province: "Nan",
+        category: "Scenic Nature",
+        duration_label: "1 Day (8 hrs)",
+        travel_mode: "driving",
+        stops: [
+          {
+            place_name: "Bo Kluea Ancient Salt Well",
+            description: "Ancient mountain rock salt wells still in active use.",
+            latitude: 19.15,
+            longitude: 101.17,
+          },
+        ],
+      });
+
+      // Community submission defaults directly to published (no pre-moderation required)
+      expect(submission.status).toBe("published");
+      expect(submission.created_by).toBe(user.id);
+
+      // Immediately visible in public trips list
+      const publicTrips = await repo.listPublishedTrips();
+      expect(publicTrips.some((t) => t.id === submission.id)).toBe(true);
+
+      // Immediately accessible via public slug lookup
+      const publicLookup = await repo.getPublishedTripBySlug(submission.slug);
+      expect(publicLookup).not.toBeNull();
+      expect(publicLookup?.title).toBe("Nan Valley Scenic Loop");
     });
 
     it("prevents non-owners from editing someone else's submission", async () => {
@@ -284,93 +323,171 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
         })
       ).rejects.toThrow(ForbiddenError);
     });
+
+    it("prevents banned users from creating or updating submissions", async () => {
+      const { salt, hash } = hashPassword("Pass12345");
+      const { user: bannedUser } = await repo.createUser("baduser@example.com", hash, salt, "Bad User");
+
+      await repo.setUserBanStatus(bannedUser.id, true, "Posting inappropriate content");
+
+      // Banned user cannot create submissions
+      await expect(
+        repo.createSubmission(bannedUser.id, {
+          title: "Inappropriate Trip",
+          short_description: "Short description.",
+          description: "Long enough description for the trip.",
+          province: "Bangkok",
+          category: "General",
+          duration_label: "1 Day",
+          stops: [],
+        })
+      ).rejects.toThrow(ForbiddenError);
+    });
   });
 
-  describe("5. Admin Moderation Queue, Approval & Rejection", () => {
-    it("allows admin to inspect, approve, or reject submissions with reason", async () => {
+  describe("5. Admin Post & User Management (Banning, Warning, Post Unpublishing, Deleting)", () => {
+    it("allows admin to list users, warn user, and clear warning", async () => {
       const { salt, hash } = hashPassword("Pass12345");
-      const { user: creator } = await repo.createUser("creator2@example.com", hash, salt, "Creator 2");
+      const { user } = await repo.createUser("user-for-warning@example.com", hash, salt, "Warned User");
 
-      const submission = await repo.createSubmission(creator.id, {
-        title: "Nan Valley Scenic Loop",
-        short_description: "Scenic motorbike route through misty northern valleys.",
-        description: "Explore traditional Nan villages, salt pits, and temple viewpoints.",
-        province: "Nan",
-        category: "Scenic Nature",
-        duration_label: "1 Day (8 hrs)",
-        travel_mode: "driving",
-        stops: [
-          {
-            place_name: "Bo Kluea Ancient Salt Well",
-            description: "Ancient mountain rock salt wells still in active use.",
-            latitude: 19.15,
-            longitude: 101.17,
-          },
-        ],
+      // 1. List users
+      const users = await repo.listUsersForAdmin();
+      const found = users.find((u) => u.id === user.id);
+      expect(found).toBeDefined();
+      expect(found?.warning_count).toBe(0);
+
+      // 2. Warn user
+      const warnedProfile = await repo.warnUser(
+        user.id,
+        "Please avoid offensive language in trip descriptions."
+      );
+      expect(warnedProfile.warning_count).toBe(1);
+      expect(warnedProfile.warning_message).toBe("Please avoid offensive language in trip descriptions.");
+
+      // Warn a second time
+      const warnedAgain = await repo.warnUser(
+        user.id,
+        "Second warning: respect community guidelines."
+      );
+      expect(warnedAgain.warning_count).toBe(2);
+
+      // 3. Clear warnings
+      const clearedProfile = await repo.clearUserWarning(user.id);
+      expect(clearedProfile.warning_count).toBe(0);
+      expect(clearedProfile.warning_message).toBeNull();
+    });
+
+    it("allows admin to unpublish a trip with a moderation note", async () => {
+      const { salt, hash } = hashPassword("Pass12345");
+      const { user } = await repo.createUser("contentcreator@example.com", hash, salt, "Content Creator");
+
+      const trip = await repo.createSubmission(user.id, {
+        title: "Spammy Trip Content",
+        short_description: "Short description with spam links.",
+        description: "Long description with spam links and offensive details.",
+        province: "Bangkok",
+        category: "Cafe",
+        duration_label: "1 Day",
+        stops: [],
       });
 
-      // 1. Pending submission appears in admin moderation queue
-      const pendingQueue = await repo.listPendingSubmissions();
-      expect(pendingQueue.some((p) => p.id === submission.id)).toBe(true);
+      expect(trip.status).toBe("published");
 
-      // 2. Admin rejects with reason
-      const rejected = await repo.reviewSubmission(
-        "admin@tamroi.local",
-        submission.id,
-        "reject",
-        "Please add at least 2 more stops for a full day itinerary."
-      );
-      expect(rejected.status).toBe("rejected");
-      expect(rejected.rejection_reason).toBe(
-        "Please add at least 2 more stops for a full day itinerary."
+      // Admin unpublishes the trip with a note
+      const unpublished = await repo.unpublishTripWithNote(
+        trip.id,
+        "Unpublished due to spam links. Please remove before republishing."
       );
 
-      // Rejected trip is removed from pending queue
-      const queueAfterReject = await repo.listPendingSubmissions();
-      expect(queueAfterReject.some((p) => p.id === submission.id)).toBe(false);
+      expect(unpublished.status).toBe("draft");
+      expect(unpublished.moderation_note).toBe(
+        "Unpublished due to spam links. Please remove before republishing."
+      );
 
-      // Creator edits submission to address feedback and resubmits
-      const resubmitted = await repo.updateSubmission(creator.id, submission.id, {
-        title: "Nan Valley Scenic Loop",
-        short_description: "Scenic motorbike route through misty northern valleys.",
-        description: "Explore traditional Nan villages, salt pits, and temple viewpoints.",
-        province: "Nan",
-        category: "Scenic Nature",
-        duration_label: "1 Day (8 hrs)",
-        travel_mode: "driving",
-        status: "pending_review",
-        stops: [
-          {
-            place_name: "Bo Kluea Ancient Salt Well",
-            description: "Ancient mountain rock salt wells still in active use.",
-            latitude: 19.15,
-            longitude: 101.17,
-          },
-          {
-            place_name: "Wat Phumin",
-            description: "Famous temple with Whispering Lovers mural.",
-            latitude: 18.77,
-            longitude: 100.77,
-          },
-        ],
+      // Must no longer be in public trips list
+      const publicTrips = await repo.listPublishedTrips();
+      expect(publicTrips.some((t) => t.id === trip.id)).toBe(false);
+
+      // Public lookup must be null
+      const publicLookup = await repo.getPublishedTripBySlug(trip.slug);
+      expect(publicLookup).toBeNull();
+    });
+
+    it("allows admin to ban user and automatically unpublishes all of their published trips", async () => {
+      const { salt, hash } = hashPassword("Pass12345");
+      const { user } = await repo.createUser("malicious@example.com", hash, salt, "Malicious Actor");
+
+      // Create two published trips
+      const trip1 = await repo.createSubmission(user.id, {
+        title: "Malicious Trip 1",
+        short_description: "Short description 1.",
+        description: "Long description 1 for trip.",
+        province: "Bangkok",
+        category: "Cafe",
+        duration_label: "1 Day",
+        stops: [],
       });
-      expect(resubmitted.status).toBe("pending_review");
-      expect(resubmitted.rejection_reason).toBeNull();
+      const trip2 = await repo.createSubmission(user.id, {
+        title: "Malicious Trip 2",
+        short_description: "Short description 2.",
+        description: "Long description 2 for trip.",
+        province: "Phuket",
+        category: "Beach",
+        duration_label: "2 Days",
+        stops: [],
+      });
 
-      // 3. Admin approves submission
-      const approved = await repo.reviewSubmission(
-        "admin@tamroi.local",
-        submission.id,
-        "approve"
+      expect(trip1.status).toBe("published");
+      expect(trip2.status).toBe("published");
+
+      // Admin bans user
+      const bannedProfile = await repo.setUserBanStatus(
+        user.id,
+        true,
+        "Repeated violation of community terms of service."
       );
-      expect(approved.status).toBe("published");
-      expect(approved.reviewed_by).toBe("admin@tamroi.local");
-      expect(approved.reviewed_at).toBeDefined();
 
-      // Now publicly visible!
-      const publicLookup = await repo.getPublishedTripBySlug(submission.slug);
-      expect(publicLookup).not.toBeNull();
-      expect(publicLookup?.title).toBe("Nan Valley Scenic Loop");
+      expect(bannedProfile.is_banned).toBe(true);
+      expect(bannedProfile.banned_reason).toBe("Repeated violation of community terms of service.");
+
+      // Both trips must be automatically unpublished!
+      const publicTrips = await repo.listPublishedTrips();
+      expect(publicTrips.some((t) => t.id === trip1.id)).toBe(false);
+      expect(publicTrips.some((t) => t.id === trip2.id)).toBe(false);
+
+      const lookup1 = await repo.getPublishedTripBySlug(trip1.slug);
+      const lookup2 = await repo.getPublishedTripBySlug(trip2.slug);
+      expect(lookup1).toBeNull();
+      expect(lookup2).toBeNull();
+
+      // Admin unbans user
+      const unbannedProfile = await repo.setUserBanStatus(user.id, false);
+      expect(unbannedProfile.is_banned).toBe(false);
+      expect(unbannedProfile.banned_reason).toBeNull();
+    });
+
+    it("allows admin to permanently delete an inappropriate trip", async () => {
+      const { salt, hash } = hashPassword("Pass12345");
+      const { user } = await repo.createUser("spammer@example.com", hash, salt, "Spammer");
+
+      const trip = await repo.createSubmission(user.id, {
+        title: "Trip To Delete",
+        short_description: "Short description to delete.",
+        description: "Long description to delete permanently.",
+        province: "Bangkok",
+        category: "Nightlife",
+        duration_label: "1 Day",
+        stops: [],
+      });
+
+      // Admin deletes the trip
+      await repo.deleteTrip(trip.id);
+
+      const publicLookup = await repo.getPublishedTripBySlug(trip.slug);
+      expect(publicLookup).toBeNull();
+
+      const userTrips = await repo.listUserSubmissions(user.id);
+      expect(userTrips.some((t) => t.id === trip.id)).toBe(false);
     });
   });
 
@@ -415,20 +532,21 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
       ).toBe(true);
     });
 
-    it("validates trip submission schema requires at least 1 stop and valid coordinates", () => {
+    it("validates trip submission schema allows 0 stops (e.g. single cafe/restaurant review) and enforces coordinate bounds when stops exist", () => {
+      // 0 stops is valid for cafe / restaurant reviews
       expect(
         tripSubmissionSchema.safeParse({
-          title: "Trip without stops",
-          short_description: "Short description with enough characters.",
-          description: "Full description with enough characters to pass validation.",
+          title: "Shibainu Story Cafe Review",
+          short_description: "A cozy shibainu cafe review in Banthat Thong.",
+          description: "Great matcha latte and friendly dogs in central Bangkok.",
           province: "Bangkok",
-          category: "Culture",
-          duration_label: "1 Day",
-          travel_mode: "driving",
+          category: "Cafe & Bakery",
+          duration_label: "2 Hours",
+          travel_mode: "walking",
           status: "pending_review",
-          stops: [], // Empty stops!
+          stops: [], // 0 stops allowed!
         }).success
-      ).toBe(false);
+      ).toBe(true);
 
       expect(
         tripSubmissionSchema.safeParse({
@@ -464,7 +582,7 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
       if (emptyDraft.success) {
         expect(emptyDraft.data.title).toBe("แบบร่างทริปใหม่");
         expect(emptyDraft.data.status).toBe("draft");
-        expect(emptyDraft.data.stops.length).toBeGreaterThanOrEqual(1);
+        expect(emptyDraft.data.stops).toHaveLength(0);
       }
 
       // Draft with partially filled stop
@@ -510,6 +628,20 @@ describe("Phase 2: Authentication, Profiles, Saved Trips, Submissions, and Moder
           rejection_reason: "Coordinates of stop #1 are missing or invalid.",
         }).success
       ).toBe(true);
+    });
+
+    it("validates admin user actions and admin post actions", () => {
+      // User actions
+      expect(adminUserActionSchema.safeParse({ userId: "u1", action: "ban", reason: "Spam" }).success).toBe(true);
+      expect(adminUserActionSchema.safeParse({ userId: "u1", action: "unban" }).success).toBe(true);
+      expect(adminUserActionSchema.safeParse({ userId: "u1", action: "warn", message: "Please mind rules" }).success).toBe(true);
+      expect(adminUserActionSchema.safeParse({ userId: "u1", action: "warn", message: "" }).success).toBe(false);
+      expect(adminUserActionSchema.safeParse({ userId: "u1", action: "clear_warn" }).success).toBe(true);
+
+      // Post actions
+      expect(adminPostActionSchema.safeParse({ action: "unpublish", note: "Contains copyright violation" }).success).toBe(true);
+      expect(adminPostActionSchema.safeParse({ action: "unpublish", note: "" }).success).toBe(false);
+      expect(adminPostActionSchema.safeParse({ action: "delete" }).success).toBe(true);
     });
 
     it("supports optional travel mode, 'other' mode with note, single budget, and multi-cover photos", () => {

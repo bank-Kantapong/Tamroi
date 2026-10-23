@@ -125,6 +125,25 @@ export default function SubmissionsDashboardPage() {
         </Link>
       </div>
 
+      {user.warning_message && (
+        <div className="mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-sm flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-heading font-black text-sm">การแจ้งเตือนจากผู้ดูแลระบบ</span>
+              {user.warning_count && user.warning_count > 0 ? (
+                <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-black text-amber-800">
+                  เตือนสะสม {user.warning_count} ครั้ง
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs font-semibold text-amber-900 leading-relaxed">
+              {user.warning_message}
+            </p>
+          </div>
+        </div>
+      )}
+
       {fetching ? (
         <SubmissionListSkeleton count={3} />
       ) : submissions.length === 0 ? (
@@ -172,6 +191,11 @@ export default function SubmissionsDashboardPage() {
                 {sub.rejection_reason && (
                   <div className="mt-3 rounded-2xl border-2 border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
                     <strong className="font-black">{t.submissions.rejectionReason}</strong> {sub.rejection_reason}
+                  </div>
+                )}
+                {sub.moderation_note && (
+                  <div className="mt-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                    <strong className="font-black">บันทึกเตือนจากผู้ดูแลระบบ:</strong> {sub.moderation_note}
                   </div>
                 )}
               </div>

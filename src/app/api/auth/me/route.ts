@@ -21,6 +21,10 @@ export async function GET() {
         display_name: profile?.display_name || session.user.display_name,
         role: profile?.role || session.user.role,
         avatar_url: profile?.avatar_url || session.user.avatar_url,
+        is_banned: Boolean(profile?.is_banned),
+        banned_reason: profile?.banned_reason || null,
+        warning_message: profile?.warning_message || null,
+        warning_count: profile?.warning_count || 0,
       },
     });
   } catch (error) {

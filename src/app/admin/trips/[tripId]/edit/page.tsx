@@ -23,10 +23,6 @@ export default async function EditTripAdminPage({ params }: EditTripPageProps) {
     notFound();
   }
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <TripEditorClient mode="edit" initialTrip={trip} />
-    </div>
-  );
+  return <TripEditorClient mode="edit" initialTrip={trip} />;
 }
 

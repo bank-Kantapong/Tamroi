@@ -6,7 +6,10 @@ import type { SessionUser } from "@/types/trip";
 interface AuthContextValue {
   user: SessionUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; user?: SessionUser; error?: string }>;
   register: (
     email: string,
     password: string,
@@ -89,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(data.user);
       fetchSavedTripIds();
-      return { success: true };
+      return { success: true, user: data.user };
     } catch {
       return { success: false, error: "Network error occurred." };
     }
@@ -111,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(data.user);
       fetchSavedTripIds();
-      return { success: true };
+      return { success: true, user: data.user };
     } catch {
       return { success: false, error: "Network error occurred." };
     }

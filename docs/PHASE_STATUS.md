@@ -57,6 +57,14 @@
 ## Phase gate
 
 - [x] Phase 1 acceptance criteria reviewed
-- [ ] Owner explicitly approved moving to Phase 2
+- [x] Owner approved Phase 2: User auth, direct publishing, single reviews/cafes, and admin user/post moderation
+
+## Phase 2 — Community & Moderation Architecture
+
+- [x] Direct Publishing: Community members publish trips directly without pre-moderation approval queue.
+- [x] Save as Draft: Creators can save drafts at any time without strict validation.
+- [x] Post Moderation: Admins can unpublish inappropriate posts with warning notes or permanently delete them.
+- [x] User Moderation: Admins can view all registered users, issue warnings (with strike counters), ban/unban users with reasons, and automatically take down content from banned accounts.
+- [x] Safety & Access Control: Banned users are blocked from logging in or mutating posts/submissions.
 
 **Rule:** Do not implement Phase 2 or Phase 3 without explicit owner approval.

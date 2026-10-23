@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type {
+  AdminUserListItem,
   CreateOrUpdateStopInput,
   CreateOrUpdateTripInput,
   Profile,
@@ -105,7 +106,7 @@ export interface TripRepository {
   createSubmission(userId: string, input: TripSubmissionInput): Promise<TripWithStops>;
   updateSubmission(userId: string, tripId: string, input: TripSubmissionInput): Promise<TripWithStops>;
 
-  // Phase 2: Admin Moderation
+  // Phase 2: Admin Moderation & User Management
   listPendingSubmissions(): Promise<TripListItem[]>;
   reviewSubmission(
     adminUserId: string,
@@ -113,6 +114,11 @@ export interface TripRepository {
     action: "approve" | "reject",
     rejectionReason?: string | null
   ): Promise<Trip>;
+  listUsersForAdmin(): Promise<AdminUserListItem[]>;
+  setUserBanStatus(userId: string, isBanned: boolean, bannedReason?: string | null): Promise<Profile>;
+  warnUser(userId: string, warningMessage: string): Promise<Profile>;
+  clearUserWarning(userId: string): Promise<Profile>;
+  unpublishTripWithNote(tripId: string, note: string): Promise<Trip>;
 }
 
 const BILINGUAL_SEARCH_ALIASES: Record<string, string> = {
@@ -338,6 +344,9 @@ export class LocalFileTripRepository implements TripRepository {
       budget_max: input.budget_max ?? null,
       travel_mode: input.travel_mode ?? null,
       travel_mode_note: input.travel_mode_note ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      location_name: input.location_name ?? null,
       status: input.status,
       is_sample: input.is_sample ?? false,
       created_at: now,
@@ -377,6 +386,9 @@ export class LocalFileTripRepository implements TripRepository {
       budget_max: input.budget_max ?? null,
       travel_mode: input.travel_mode ?? null,
       travel_mode_note: input.travel_mode_note ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      location_name: input.location_name ?? null,
       status: input.status,
       is_sample: input.is_sample ?? existing.is_sample,
       updated_at: new Date().toISOString(),
@@ -736,8 +748,15 @@ export class LocalFileTripRepository implements TripRepository {
       finalSlug = `${baseSlug}-${counter++}`;
     }
 
+    const userProfile = state.profiles.find((p) => p.user_id === userId);
+    if (userProfile?.is_banned) {
+      throw new ForbiddenError(
+        `Your account has been banned: ${userProfile.banned_reason || "Violation of community rules"}`
+      );
+    }
+
     const now = new Date().toISOString();
-    const status: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+    const status: TripStatus = input.status === "draft" ? "draft" : "published";
     const tripId = crypto.randomUUID();
 
     const trip: Trip = {
@@ -755,11 +774,14 @@ export class LocalFileTripRepository implements TripRepository {
       budget_max: input.budget_max ?? null,
       travel_mode: input.travel_mode ?? null,
       travel_mode_note: input.travel_mode_note ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      location_name: input.location_name ?? null,
       status,
       is_sample: false,
       created_by: userId,
       rejection_reason: null,
-      submitted_at: status === "pending_review" ? now : null,
+      submitted_at: status === "published" ? now : null,
       reviewed_at: null,
       reviewed_by: null,
       created_at: now,
@@ -804,12 +826,16 @@ export class LocalFileTripRepository implements TripRepository {
     if (trip.created_by !== userId) {
       throw new ForbiddenError("You can only edit your own submissions.");
     }
-    if (trip.status === "published") {
-      throw new ForbiddenError("Published trips cannot be edited via submission workflow.");
+
+    const userProfile = state.profiles.find((p) => p.user_id === userId);
+    if (userProfile?.is_banned) {
+      throw new ForbiddenError(
+        `Your account has been banned: ${userProfile.banned_reason || "Violation of community rules"}`
+      );
     }
 
     const now = new Date().toISOString();
-    const nextStatus: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+    const nextStatus: TripStatus = input.status === "draft" ? "draft" : "published";
 
     trip.title = input.title.trim();
     trip.short_description = input.short_description.trim();
@@ -823,9 +849,12 @@ export class LocalFileTripRepository implements TripRepository {
     trip.budget_max = input.budget_max ?? null;
     trip.travel_mode = input.travel_mode ?? null;
     trip.travel_mode_note = input.travel_mode_note ?? null;
+    trip.latitude = input.latitude ?? null;
+    trip.longitude = input.longitude ?? null;
+    trip.location_name = input.location_name ?? null;
     trip.status = nextStatus;
     trip.updated_at = now;
-    if (nextStatus === "pending_review") {
+    if (nextStatus === "published") {
       trip.submitted_at = now;
       trip.rejection_reason = null;
     }
@@ -894,6 +923,114 @@ export class LocalFileTripRepository implements TripRepository {
       trip.reviewed_by = adminUserId;
       trip.rejection_reason = rejectionReason?.trim() || "Rejected by administrator.";
     }
+    trip.updated_at = now;
+    this.writeState(state);
+    return structuredClone(trip);
+  }
+
+  async listUsersForAdmin(): Promise<AdminUserListItem[]> {
+    const state = this.readState();
+    return state.users.map((u) => {
+      const profile = state.profiles.find((p) => p.user_id === u.id);
+      const postCount = state.trips.filter((t) => t.created_by === u.id).length;
+      return {
+        id: u.id,
+        email: u.email,
+        display_name: profile?.display_name || u.email.split("@")[0],
+        avatar_url: profile?.avatar_url || null,
+        role: profile?.role || "user",
+        is_banned: Boolean(profile?.is_banned),
+        banned_reason: profile?.banned_reason || null,
+        warning_message: profile?.warning_message || null,
+        warning_count: profile?.warning_count || 0,
+        post_count: postCount,
+        created_at: u.created_at,
+      };
+    });
+  }
+
+  async setUserBanStatus(
+    userId: string,
+    isBanned: boolean,
+    bannedReason?: string | null
+  ): Promise<Profile> {
+    const state = this.readState();
+    let profile = state.profiles.find((p) => p.user_id === userId);
+    const now = new Date().toISOString();
+    if (!profile) {
+      profile = {
+        user_id: userId,
+        display_name: "User",
+        avatar_url: null,
+        role: "user",
+        created_at: now,
+        updated_at: now,
+      };
+      state.profiles.push(profile);
+    }
+    profile.is_banned = isBanned;
+    profile.banned_reason = isBanned ? bannedReason || "ฝ่าฝืนกฎการใช้งานของระบบ" : null;
+    profile.updated_at = now;
+
+    if (isBanned) {
+      for (const trip of state.trips) {
+        if (trip.created_by === userId && trip.status === "published") {
+          trip.status = "draft";
+          trip.moderation_note = "ซ่อนเนื่องจากบัญชีผู้ใช้ถูกระงับการใช้งาน";
+          trip.updated_at = now;
+        }
+      }
+    }
+
+    this.writeState(state);
+    return structuredClone(profile);
+  }
+
+  async warnUser(userId: string, warningMessage: string): Promise<Profile> {
+    const state = this.readState();
+    let profile = state.profiles.find((p) => p.user_id === userId);
+    const now = new Date().toISOString();
+    if (!profile) {
+      profile = {
+        user_id: userId,
+        display_name: "User",
+        avatar_url: null,
+        role: "user",
+        created_at: now,
+        updated_at: now,
+      };
+      state.profiles.push(profile);
+    }
+    profile.warning_message = warningMessage.trim();
+    profile.warning_count = (profile.warning_count || 0) + 1;
+    profile.updated_at = now;
+    this.writeState(state);
+    return structuredClone(profile);
+  }
+
+  async clearUserWarning(userId: string): Promise<Profile> {
+    const state = this.readState();
+    const profile = state.profiles.find((p) => p.user_id === userId);
+    if (!profile) {
+      throw new NotFoundError("User profile not found.");
+    }
+    profile.warning_message = null;
+    profile.warning_count = 0;
+    profile.updated_at = new Date().toISOString();
+    this.writeState(state);
+    return structuredClone(profile);
+  }
+
+  async unpublishTripWithNote(tripId: string, note: string): Promise<Trip> {
+    const state = this.readState();
+    const trip = state.trips.find((t) => t.id === tripId);
+    if (!trip) {
+      throw new NotFoundError("Trip not found.");
+    }
+    const now = new Date().toISOString();
+    trip.status = "draft";
+    trip.moderation_note = note.trim();
+    trip.rejection_reason = note.trim();
     trip.updated_at = now;
     this.writeState(state);
     return structuredClone(trip);
@@ -1096,7 +1233,10 @@ export class SupabaseTripRepository implements TripRepository {
         budget_min: input.budget_min ?? null,
         budget_max: input.budget_max ?? null,
         travel_mode: input.travel_mode ?? null,
-      travel_mode_note: input.travel_mode_note ?? null,
+        travel_mode_note: input.travel_mode_note ?? null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        location_name: input.location_name ?? null,
         status: input.status,
         is_sample: input.is_sample ?? false,
       })
@@ -1135,7 +1275,10 @@ export class SupabaseTripRepository implements TripRepository {
         budget_min: input.budget_min ?? null,
         budget_max: input.budget_max ?? null,
         travel_mode: input.travel_mode ?? null,
-      travel_mode_note: input.travel_mode_note ?? null,
+        travel_mode_note: input.travel_mode_note ?? null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        location_name: input.location_name ?? null,
         status: input.status,
       })
       .eq("id", tripId)
@@ -1550,8 +1693,20 @@ export class SupabaseTripRepository implements TripRepository {
       finalSlug = `${baseSlug}-${Date.now().toString(36)}`;
     }
 
+    const { data: userProfile } = await this.adminClient
+      .from("profiles")
+      .select("is_banned, banned_reason")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (userProfile?.is_banned) {
+      throw new ForbiddenError(
+        `Your account has been banned: ${userProfile.banned_reason || "Violation of community rules"}`
+      );
+    }
+
     const now = new Date().toISOString();
-    const status: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+    const status: TripStatus = input.status === "draft" ? "draft" : "published";
 
     const { data: createdTrip, error: tripErr } = await this.adminClient
       .from("trips")
@@ -1568,12 +1723,15 @@ export class SupabaseTripRepository implements TripRepository {
         budget_min: input.budget_min ?? null,
         budget_max: input.budget_max ?? null,
         travel_mode: input.travel_mode ?? null,
-      travel_mode_note: input.travel_mode_note ?? null,
+        travel_mode_note: input.travel_mode_note ?? null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        location_name: input.location_name ?? null,
         status,
         is_sample: false,
         created_by: userId,
         rejection_reason: null,
-        submitted_at: status === "pending_review" ? now : null,
+        submitted_at: status === "published" ? now : null,
       })
       .select("*")
       .single();
@@ -1594,17 +1752,21 @@ export class SupabaseTripRepository implements TripRepository {
       notes: stopInput.notes ?? null,
     }));
 
-    const { data: createdStops, error: stopsErr } = await this.adminClient
-      .from("trip_stops")
-      .insert(stopsPayload)
-      .select("*")
-      .order("sequence", { ascending: true });
+    let createdStops: TripStop[] = [];
+    if (stopsPayload.length > 0) {
+      const { data: insertedStops, error: stopsErr } = await this.adminClient
+        .from("trip_stops")
+        .insert(stopsPayload)
+        .select("*")
+        .order("sequence", { ascending: true });
 
-    if (stopsErr) throw new Error(stopsErr.message);
+      if (stopsErr) throw new Error(stopsErr.message);
+      createdStops = (insertedStops ?? []) as TripStop[];
+    }
 
     return {
       ...(createdTrip as Trip),
-      stops: (createdStops ?? []) as TripStop[],
+      stops: createdStops,
     };
   }
 
@@ -1624,12 +1786,21 @@ export class SupabaseTripRepository implements TripRepository {
     if (existing.created_by !== userId) {
       throw new ForbiddenError("You can only edit your own submissions.");
     }
-    if (existing.status === "published") {
-      throw new ForbiddenError("Published trips cannot be edited via submission workflow.");
+
+    const { data: userProfile } = await this.adminClient
+      .from("profiles")
+      .select("is_banned, banned_reason")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (userProfile?.is_banned) {
+      throw new ForbiddenError(
+        `Your account has been banned: ${userProfile.banned_reason || "Violation of community rules"}`
+      );
     }
 
     const now = new Date().toISOString();
-    const nextStatus: TripStatus = input.status === "draft" ? "draft" : "pending_review";
+    const nextStatus: TripStatus = input.status === "draft" ? "draft" : "published";
 
     const { data: updatedTrip, error: updateErr } = await this.adminClient
       .from("trips")
@@ -1645,11 +1816,15 @@ export class SupabaseTripRepository implements TripRepository {
         budget_min: input.budget_min ?? null,
         budget_max: input.budget_max ?? null,
         travel_mode: input.travel_mode ?? null,
-      travel_mode_note: input.travel_mode_note ?? null,
+        travel_mode_note: input.travel_mode_note ?? null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        location_name: input.location_name ?? null,
         status: nextStatus,
         updated_at: now,
-        submitted_at: nextStatus === "pending_review" ? now : existing.submitted_at,
-        rejection_reason: nextStatus === "pending_review" ? null : existing.rejection_reason,
+        submitted_at: nextStatus === "published" ? now : existing.submitted_at,
+        rejection_reason:
+          nextStatus === "published" ? null : existing.rejection_reason,
       })
       .eq("id", tripId)
       .select("*")
@@ -1673,17 +1848,21 @@ export class SupabaseTripRepository implements TripRepository {
       notes: stopInput.notes ?? null,
     }));
 
-    const { data: createdStops, error: stopsErr } = await this.adminClient
-      .from("trip_stops")
-      .insert(stopsPayload)
-      .select("*")
-      .order("sequence", { ascending: true });
+    let createdStops: TripStop[] = [];
+    if (stopsPayload.length > 0) {
+      const { data: insertedStops, error: stopsErr } = await this.adminClient
+        .from("trip_stops")
+        .insert(stopsPayload)
+        .select("*")
+        .order("sequence", { ascending: true });
 
-    if (stopsErr) throw new Error(stopsErr.message);
+      if (stopsErr) throw new Error(stopsErr.message);
+      createdStops = (insertedStops ?? []) as TripStop[];
+    }
 
     return {
       ...(updatedTrip as Trip),
-      stops: (createdStops ?? []) as TripStop[],
+      stops: createdStops,
     };
   }
 
@@ -1733,6 +1912,134 @@ export class SupabaseTripRepository implements TripRepository {
     const { data, error } = await this.adminClient
       .from("trips")
       .update(updatePayload)
+      .eq("id", tripId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as Trip;
+  }
+
+  async listUsersForAdmin(): Promise<AdminUserListItem[]> {
+    const { data: usersData, error: usersErr } = await this.adminClient.auth.admin.listUsers();
+    if (usersErr) throw new Error(usersErr.message);
+
+    const { data: profiles, error: profErr } = await this.adminClient
+      .from("profiles")
+      .select("*");
+    if (profErr) throw new Error(profErr.message);
+
+    const { data: trips, error: tripsErr } = await this.adminClient
+      .from("trips")
+      .select("created_by");
+    if (tripsErr) throw new Error(tripsErr.message);
+
+    const tripCountMap = new Map<string, number>();
+    for (const t of trips ?? []) {
+      if (t.created_by) {
+        tripCountMap.set(t.created_by, (tripCountMap.get(t.created_by) || 0) + 1);
+      }
+    }
+
+    const profileMap = new Map<string, Record<string, unknown>>();
+    for (const p of profiles ?? []) {
+      profileMap.set(p.user_id, p);
+    }
+
+    return (usersData.users ?? []).map((u) => {
+      const prof = profileMap.get(u.id);
+      return {
+        id: u.id,
+        email: u.email || "",
+        display_name: (prof?.display_name as string) || u.email?.split("@")[0] || "User",
+        avatar_url: (prof?.avatar_url as string) || null,
+        role: (prof?.role as UserRole) || "user",
+        is_banned: Boolean(prof?.is_banned),
+        banned_reason: (prof?.banned_reason as string) || null,
+        warning_message: (prof?.warning_message as string) || null,
+        warning_count: (prof?.warning_count as number) || 0,
+        post_count: tripCountMap.get(u.id) || 0,
+        created_at: u.created_at,
+      };
+    });
+  }
+
+  async setUserBanStatus(
+    userId: string,
+    isBanned: boolean,
+    bannedReason?: string | null
+  ): Promise<Profile> {
+    const { data, error } = await this.adminClient
+      .from("profiles")
+      .update({
+        is_banned: isBanned,
+        banned_reason: isBanned ? bannedReason || "ฝ่าฝืนกฎการใช้งานของระบบ" : null,
+      })
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    if (isBanned) {
+      await this.adminClient
+        .from("trips")
+        .update({
+          status: "draft",
+          moderation_note: "ซ่อนเนื่องจากบัญชีผู้ใช้ถูกระงับการใช้งาน",
+        })
+        .eq("created_by", userId)
+        .eq("status", "published");
+    }
+
+    return data as Profile;
+  }
+
+  async warnUser(userId: string, warningMessage: string): Promise<Profile> {
+    const { data: existing } = await this.adminClient
+      .from("profiles")
+      .select("warning_count")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const nextCount = ((existing?.warning_count as number) || 0) + 1;
+
+    const { data, error } = await this.adminClient
+      .from("profiles")
+      .update({
+        warning_message: warningMessage.trim(),
+        warning_count: nextCount,
+      })
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as Profile;
+  }
+
+  async clearUserWarning(userId: string): Promise<Profile> {
+    const { data, error } = await this.adminClient
+      .from("profiles")
+      .update({ warning_message: null, warning_count: 0 })
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as Profile;
+  }
+
+  async unpublishTripWithNote(tripId: string, note: string): Promise<Trip> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.adminClient
+      .from("trips")
+      .update({
+        status: "draft",
+        moderation_note: note.trim(),
+        rejection_reason: note.trim(),
+        updated_at: now,
+      })
       .eq("id", tripId)
       .select("*")
       .single();

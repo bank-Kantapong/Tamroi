@@ -28,7 +28,11 @@ function LoginForm() {
     setIsSubmitting(false);
 
     if (result.success) {
-      router.push(returnTo);
+      if (result.user?.role === "admin" && returnTo === "/") {
+        router.push("/admin");
+      } else {
+        router.push(returnTo);
+      }
       router.refresh();
     } else {
       setError(result.error || "Login failed");

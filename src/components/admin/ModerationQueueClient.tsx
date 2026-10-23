@@ -230,7 +230,7 @@ export function ModerationQueueClient({
                     {item.province}
                   </span>
                   <span className="text-xs text-slate-500">
-                    {item.stop_count} จุดแวะ
+                    {item.stop_count === 0 ? "รีวิวเดี่ยว (ไม่มีจุดแวะ)" : `${item.stop_count} จุดแวะ`}
                   </span>
                   {item.submitted_at && (
                     <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
@@ -346,40 +346,46 @@ export function ModerationQueueClient({
                 <h3 className="font-black text-slate-700 mb-2">
                   จุดแวะในทริป ({(selectedTrip.stops ?? []).length} จุด):
                 </h3>
-                <div className="space-y-2">
-                  {(selectedTrip.stops ?? []).map((stop) => (
-                    <div
-                      key={stop.id}
-                      className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-primary)] text-xs font-black text-white">
-                          {stop.sequence}
-                        </span>
-                        <div>
-                          <p className="font-black text-slate-800">{stop.place_name}</p>
-                          <p className="text-slate-600 text-[11px] line-clamp-2">
-                            {stop.description}
-                          </p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            Coords: {stop.latitude}, {stop.longitude}
-                            {stop.suggested_arrival_time && ` • Time: ${stop.suggested_arrival_time}`}
-                            {stop.estimated_cost !== null && ` • Cost: ฿${stop.estimated_cost}`}
-                          </p>
+                {(selectedTrip.stops ?? []).length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-slate-500">
+                    ไม่มีจุดแวะย่อย (เป็นรีวิวเดี่ยว เช่น รีวิวคาเฟ่ / รีวิวร้านอาหาร)
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(selectedTrip.stops ?? []).map((stop) => (
+                      <div
+                        key={stop.id}
+                        className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-primary)] text-xs font-black text-white">
+                            {stop.sequence}
+                          </span>
+                          <div>
+                            <p className="font-black text-slate-800">{stop.place_name}</p>
+                            <p className="text-slate-600 text-[11px] line-clamp-2">
+                              {stop.description}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              Coords: {stop.latitude}, {stop.longitude}
+                              {stop.suggested_arrival_time && ` • Time: ${stop.suggested_arrival_time}`}
+                              {stop.estimated_cost !== null && ` • Cost: ฿${stop.estimated_cost}`}
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
-                      {stop.image_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={stop.image_url}
-                          alt={stop.place_name}
-                          className="h-12 w-16 shrink-0 rounded-lg object-cover border border-slate-200"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
+                        {stop.image_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={stop.image_url.split(/[\n,;]+/)[0].trim()}
+                            alt={stop.place_name}
+                            className="h-12 w-16 shrink-0 rounded-lg object-cover border border-slate-200"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

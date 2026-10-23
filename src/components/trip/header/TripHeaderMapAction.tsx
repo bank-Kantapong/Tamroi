@@ -20,13 +20,16 @@ export function TripHeaderMapAction({
   locale,
   t,
 }: TripHeaderMapActionProps) {
+  // If the trip has no stops and no coordinates pinned, hide this box
+  if (stopsCount === 0 || !googleMapsResult.hasValidRoute) {
+    return null;
+  }
+
+  const isSinglePlace = stopsCount === 1;
+
   return (
     <div className="mt-4 action-box-maps">
-      {!googleMapsResult.hasValidRoute ? (
-        <p className="text-xs font-bold text-slate-600">
-          {googleMapsResult.reason}
-        </p>
-      ) : !googleMapsResult.isSegmented ? (
+      {!googleMapsResult.isSegmented ? (
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3.5">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-teal-light)] text-white shadow-sm">
@@ -34,12 +37,28 @@ export function TripHeaderMapAction({
             </span>
             <div>
               <h2 className="font-heading text-sm font-black text-[var(--color-brand-deep)] sm:text-base">
-                {locale === "th"
-                  ? "พร้อมออกเดินทางตามรอยหรือยัง?"
-                  : t.detail.readyTitle}
+                {isSinglePlace
+                  ? locale === "th"
+                    ? "พร้อมเดินทางไปตามรอยหรือยัง?"
+                    : "Ready to visit?"
+                  : locale === "th"
+                    ? "พร้อมออกเดินทางตามรอยหรือยัง?"
+                    : t.detail.readyTitle}
               </h2>
               <p className="mt-0.5 text-xs font-medium text-slate-600">
-                {locale === "th" ? (
+                {isSinglePlace ? (
+                  locale === "th" ? (
+                    <>
+                      เปิดพิกัดนำทางไปยังสถานที่นี้ใน{" "}
+                      <span className="underline decoration-[#158492]/60 underline-offset-2">
+                        Google Maps
+                      </span>{" "}
+                      ได้ทันที
+                    </>
+                  ) : (
+                    "Open directions to this place directly in Google Maps"
+                  )
+                ) : locale === "th" ? (
                   <>
                     ลิงก์พิกัดทั้ง {stopsCount} จุดตามลำดับเข้าแผนที่{" "}
                     <span className="underline decoration-[#158492]/60 underline-offset-2">
@@ -61,9 +80,13 @@ export function TripHeaderMapAction({
           >
             <Map className="h-4 w-4 text-[var(--color-sun-text-dark)]" aria-hidden="true" />
             <span>
-              {locale === "th"
-                ? "เปิดดูทริปใน Google Maps"
-                : t.detail.openFullGoogleMaps}
+              {isSinglePlace
+                ? locale === "th"
+                  ? "เปิดนำทางใน Google Maps"
+                  : "Navigate in Google Maps"
+                : locale === "th"
+                  ? "เปิดดูทริปใน Google Maps"
+                  : t.detail.openFullGoogleMaps}
             </span>
             <ArrowRight className="h-4 w-4 text-[var(--color-sun-text-dark)]" aria-hidden="true" />
           </a>
@@ -115,4 +138,3 @@ export function TripHeaderMapAction({
     </div>
   );
 }
-

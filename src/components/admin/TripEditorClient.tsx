@@ -23,11 +23,25 @@ import {
   FileEdit,
 } from "lucide-react";
 import type { TravelMode, TripStatus, TripStop, TripWithStops } from "@/types/trip";
+import dynamic from "next/dynamic";
 import { slugify } from "@/lib/validation";
 import { formatCoordinatePair } from "@/lib/google-maps";
 import { useFormValidityBridge } from "@/components/FormValidityBridge";
 import { CustomDropdown, DropdownOption } from "@/components/CustomDropdown";
 import { ImageUploadField, MultiImageUploadField } from "@/components/common";
+import { ConfirmModal } from "./ConfirmModal";
+
+const LocationPickerMap = dynamic(
+  () => import("@/components/trip/LocationPickerMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[240px] w-full items-center justify-center rounded-2xl border-2 border-slate-200 bg-slate-50 text-xs font-bold text-slate-400">
+        กำลังโหลดแผนที่ปักหมุด (Loading map)...
+      </div>
+    ),
+  }
+);
 
 interface TripEditorClientProps {
   mode: "create" | "edit";
@@ -158,6 +172,19 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
   const [isSample, setIsSample] = useState<boolean>(
     initialTrip?.is_sample ?? false
   );
+  const [headerLat, setHeaderLat] = useState<string>(
+    initialTrip?.latitude !== null && initialTrip?.latitude !== undefined
+      ? String(initialTrip.latitude)
+      : ""
+  );
+  const [headerLng, setHeaderLng] = useState<string>(
+    initialTrip?.longitude !== null && initialTrip?.longitude !== undefined
+      ? String(initialTrip.longitude)
+      : ""
+  );
+  const [locationName, setLocationName] = useState<string>(
+    initialTrip?.location_name ?? ""
+  );
 
   const [tripSaving, setTripSaving] = useState(false);
   const [tripFeedback, setTripFeedback] = useState<{
@@ -174,6 +201,7 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [stopToDelete, setStopToDelete] = useState<TripStop | null>(null);
 
   function handleAutoSlug() {
     const generated = slugify(title);
@@ -192,6 +220,11 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
 
     setTripSaving(true);
     try {
+      const parsedHeaderLat =
+        headerLat.trim() !== "" ? Number(headerLat) : null;
+      const parsedHeaderLng =
+        headerLng.trim() !== "" ? Number(headerLng) : null;
+
       const payload = {
         title,
         slug,
@@ -207,6 +240,9 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
         travel_mode: travelMode,
         status,
         is_sample: isSample,
+        latitude: parsedHeaderLat,
+        longitude: parsedHeaderLng,
+        location_name: locationName.trim() || null,
       };
 
       const url =
@@ -364,12 +400,14 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
     }
   }
 
-  async function handleDeleteStop(stop: TripStop) {
-    if (!initialTrip) return;
-    const confirmed = window.confirm(
-      `Remove Stop #${stop.sequence} "${stop.place_name}" from this itinerary?`
-    );
-    if (!confirmed) return;
+  function requestDeleteStop(stop: TripStop) {
+    setStopToDelete(stop);
+  }
+
+  async function confirmDeleteStop() {
+    if (!initialTrip || !stopToDelete) return;
+    const stop = stopToDelete;
+    setStopToDelete(null);
 
     setStopSaving(true);
     setStopFeedback(null);
@@ -777,6 +815,96 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
             </div>
           </div>
 
+          {/* Optional Trip Header Location Pinning for Single-Place Review or Starting Point */}
+          <div className="rounded-2xl border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-soft)] p-4 shadow-sm">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <MapPin className="h-4 w-4 text-[var(--color-brand-primary)]" />
+                <span className={labelClass}>
+                  ปักหมุดพิกัดสถานที่หลัก (Trip Header Location) — ไม่บังคับ (Optional)
+                </span>
+                <span className="rounded-full border border-teal-300 bg-teal-100/70 px-2 py-0.5 text-[10px] font-bold text-teal-800">
+                  Optional
+                </span>
+              </div>
+              {(headerLat || headerLng || locationName) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHeaderLat("");
+                    setHeaderLng("");
+                    setLocationName("");
+                  }}
+                  className="text-xs font-bold text-rose-500 hover:text-rose-700 underline"
+                >
+                  ล้างหมุด (ไม่ปักหมุด)
+                </button>
+              )}
+            </div>
+            <p className="mb-3 text-xs text-slate-500">
+              สำหรับรีวิวสถานที่เดียว (เช่น คาเฟ่, ร้านอาหาร) ที่ไม่มีจุดแวะย่อย หรือจุดนัดพบเริ่มต้น เพื่อให้ระบบแสดงแผนที่และปุ่มนำทาง Google Maps
+            </p>
+
+            <div className="mb-3">
+              <label htmlFor="trip-location-name" className={labelClass}>
+                ชื่อสถานที่ / หมุดแผนที่ (Location / Place Name)
+              </label>
+              <input
+                id="trip-location-name"
+                type="text"
+                value={locationName}
+                onChange={(e) => setLocationName(e.target.value)}
+                placeholder="เช่น Shibainu Story หรือชื่อร้าน/สถานที่"
+                className={inputClass}
+              />
+            </div>
+
+            <LocationPickerMap
+              latitude={headerLat ? Number(headerLat) : null}
+              longitude={headerLng ? Number(headerLng) : null}
+              placeName={locationName || title}
+              onChange={(lat, lng) => {
+                setHeaderLat(String(lat));
+                setHeaderLng(String(lng));
+              }}
+            />
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="trip-header-lat" className={labelClass}>
+                  Latitude (-90 ถึง 90)
+                </label>
+                <input
+                  id="trip-header-lat"
+                  type="number"
+                  step="any"
+                  min="-90"
+                  max="90"
+                  value={headerLat}
+                  onChange={(e) => setHeaderLat(e.target.value)}
+                  placeholder="เช่น 13.7563"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+              <div>
+                <label htmlFor="trip-header-lng" className={labelClass}>
+                  Longitude (-180 ถึง 180)
+                </label>
+                <input
+                  id="trip-header-lng"
+                  type="number"
+                  step="any"
+                  min="-180"
+                  max="180"
+                  value={headerLng}
+                  onChange={(e) => setHeaderLng(e.target.value)}
+                  placeholder="เช่น 100.5018"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center justify-end gap-3 border-t border-[var(--color-sage)]/40 pt-4">
             <button
               type="submit"
@@ -914,7 +1042,7 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
                         <button
                           type="button"
                           disabled={stopSaving}
-                          onClick={() => handleDeleteStop(stop)}
+                          onClick={() => requestDeleteStop(stop)}
                           aria-label={`Delete ${stop.place_name}`}
                           className="rounded-lg border border-red-200 bg-white p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-40"
                         >
@@ -988,6 +1116,31 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
                 <div id="stop-desc-err" className="field-error-msg">
                   <span aria-hidden="true">❌</span> กรุณากรอกรายละเอียดจุดแวะ
                 </div>
+              </div>
+
+              {/* Stop Map Pinning Picker */}
+              <div className="rounded-2xl border-2 border-teal-200 bg-teal-50/40 p-3 sm:p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4 text-[var(--color-brand-primary)]" />
+                    <span>ปักหมุดตำแหน่งจุดแวะในแผนที่ (Map Pinning)</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded-full">
+                    ค้นหาหรือคลิกบนแผนที่
+                  </span>
+                </div>
+                <LocationPickerMap
+                  latitude={stopForm.latitude ? Number(stopForm.latitude) : null}
+                  longitude={stopForm.longitude ? Number(stopForm.longitude) : null}
+                  placeName={stopForm.place_name}
+                  onChange={(lat, lng) => {
+                    setStopForm((s) => ({
+                      ...s,
+                      latitude: String(lat),
+                      longitude: String(lng),
+                    }));
+                  }}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1130,6 +1283,19 @@ export function TripEditorClient({ mode, initialTrip }: TripEditorClientProps) {
             </form>
           </div>
         </section>
+      )}
+
+      {stopToDelete && (
+        <ConfirmModal
+          isOpen={true}
+          title="ยืนยันการลบจุดแวะ"
+          description={`คุณแน่ใจหรือไม่ว่าต้องการลบจุดแวะ #${stopToDelete.sequence} "${stopToDelete.place_name}" ออกจากแผนการเดินทางนี้?`}
+          confirmText="ลบจุดแวะ"
+          cancelText="ยกเลิก"
+          variant="danger"
+          onConfirm={confirmDeleteStop}
+          onCancel={() => setStopToDelete(null)}
+        />
       )}
     </div>
   );

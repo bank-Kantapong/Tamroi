@@ -41,6 +41,16 @@ export async function POST(request: Request) {
     }
 
     const repo = getTripRepository();
+    const profile = await repo.getProfile(session.user.id);
+    if (profile?.is_banned) {
+      return NextResponse.json(
+        {
+          error: `บัญชีของคุณถูกระงับการใช้งาน: ${profile.banned_reason || "ฝ่าฝืนกฎการใช้งานของชุมชน"}`,
+        },
+        { status: 403 }
+      );
+    }
+
     const created = await repo.createSubmission(session.user.id, parsed.data);
 
     return NextResponse.json(

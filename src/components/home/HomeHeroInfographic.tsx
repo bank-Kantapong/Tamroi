@@ -6,10 +6,6 @@ import {
   Sparkles,
   MapPin,
   Clock,
-  Compass,
-  Map,
-  Car,
-  Copy,
   ExternalLink,
   Check,
   ArrowRight,
@@ -358,10 +354,6 @@ export function HomeHeroInfographic({ locale }: HomeHeroInfographicProps) {
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#91DDE3] bg-white px-3 py-1 text-[11px] font-extrabold text-[#097C87] shadow-sm">
-                <Copy className="h-3 w-3" aria-hidden="true" />
-                Lat, Lng
-              </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-[#F6C343] px-3 py-1 text-[11px] font-black text-[#523A00] shadow-sm">
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
                 Google Maps
@@ -386,20 +378,6 @@ export function HomeHeroInfographic({ locale }: HomeHeroInfographicProps) {
               <div className="mt-2 inline-block rounded-lg bg-[#00828A] px-2.5 py-1 font-heading text-xs font-extrabold text-white">
                 {locale === "th" ? "เลือกทริปตามสไตล์ & งบ" : "Pick Your Vibe & Budget"}
               </div>
-              <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-700">
-                {locale === "th"
-                  ? "คัดจุดแวะ เรียงลำดับไหลลื่น ไม่ต้องเปิด 20 แท็บ"
-                  : "Curated stops in logical order—no more 20 open tabs"}
-              </p>
-            </div>
-            <div className="mt-4 flex items-center justify-between pt-1">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#D7F3F6] text-[#00828A]">
-                <MapPin className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <div className="mx-2 h-0.5 flex-1 border-b-2 border-dashed border-[#00828A]/40" />
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#D7F3F6] text-[#00828A] shadow-sm">
-                <Map className="h-4 w-4" aria-hidden="true" />
-              </span>
             </div>
           </div>
 
@@ -419,18 +397,6 @@ export function HomeHeroInfographic({ locale }: HomeHeroInfographicProps) {
                   ? "เช็กแมพ & เวลาแวะแต่ละจุด"
                   : "Inspect Route & Timing"}
               </h3>
-              <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-700">
-                {locale === "th"
-                  ? "เห็นเส้นทาง 1 → 2 → 3 → 4 พร้อมเวลาและค่าใช้จ่าย"
-                  : "Visualize stops 1 → 2 → 3 → 4 with arrival time & cost"}
-              </p>
-            </div>
-            <div className="mt-4 flex items-center justify-between pt-1">
-              <span className="text-xs font-black text-[#F6C343]">✦</span>
-              <div className="mx-2 h-0.5 flex-1 border-b-2 border-dashed border-[#58B67C]/45" />
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#D6EEDB] text-[#237746] shadow-sm">
-                <Compass className="h-4 w-4" aria-hidden="true" />
-              </span>
             </div>
           </div>
 
@@ -450,18 +416,6 @@ export function HomeHeroInfographic({ locale }: HomeHeroInfographicProps) {
                   ? "กดเปิดนำทาง Google Maps ทันที"
                   : "Launch in Google Maps"}
               </h3>
-              <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-700">
-                {locale === "th"
-                  ? "ส่งครบทุกจุดแวะ (Waypoints) หรือกดปักหมุดได้ในทีเดียว"
-                  : "Send full waypoints or copy coordinates in one click"}
-              </p>
-            </div>
-            <div className="mt-4 flex items-center justify-between pt-1">
-              <span className="text-xs font-black text-[#F47A6A]">✦</span>
-              <div className="mx-2 h-0.5 flex-1 border-b-2 border-dashed border-[#F47A6A]/45" />
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FDE2DC] text-[#DE5B47] shadow-sm">
-                <Car className="h-4 w-4" aria-hidden="true" />
-              </span>
             </div>
           </div>
         </div>

@@ -80,6 +80,36 @@ const optionalPositiveNumber = z
     return Math.round(num * 10) / 10;
   });
 
+export const optionalLatitude = z
+  .union([z.number(), z.string(), z.null(), z.undefined()])
+  .transform((val, ctx) => {
+    if (val === null || val === undefined || val === "") return null;
+    const num = typeof val === "number" ? val : Number(String(val).trim());
+    if (!Number.isFinite(num) || num < -90 || num > 90) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Latitude must be a valid number between -90 and 90",
+      });
+      return z.NEVER;
+    }
+    return Number(num.toFixed(6));
+  });
+
+export const optionalLongitude = z
+  .union([z.number(), z.string(), z.null(), z.undefined()])
+  .transform((val, ctx) => {
+    if (val === null || val === undefined || val === "") return null;
+    const num = typeof val === "number" ? val : Number(String(val).trim());
+    if (!Number.isFinite(num) || num < -180 || num > 180) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Longitude must be a valid number between -180 and 180",
+      });
+      return z.NEVER;
+    }
+    return Number(num.toFixed(6));
+  });
+
 export const tripInputSchema = z
   .object({
     title: z
@@ -131,6 +161,9 @@ export const tripInputSchema = z
       .optional()
       .default(null),
     travel_mode_note: optionalNullableString,
+    latitude: optionalLatitude.optional().default(null),
+    longitude: optionalLongitude.optional().default(null),
+    location_name: optionalNullableString.optional().default(null),
     status: z.enum(TRIP_STATUSES, {
       errorMap: () => ({ message: "Status must be draft or published" }),
     }),
@@ -303,6 +336,16 @@ export const tripSubmissionSchema = z.preprocess(
             (typeof raw.duration_label === "string" && raw.duration_label.trim()) || "1 Day",
           budget_min: rawBudgetMin && !isNaN(rawBudgetMin) ? rawBudgetMin : null,
           budget_max: rawBudgetMax && !isNaN(rawBudgetMax) ? rawBudgetMax : null,
+          latitude:
+            raw.latitude !== undefined && raw.latitude !== null && raw.latitude !== ""
+              ? Number(raw.latitude)
+              : null,
+          longitude:
+            raw.longitude !== undefined && raw.longitude !== null && raw.longitude !== ""
+              ? Number(raw.longitude)
+              : null,
+          location_name:
+            typeof raw.location_name === "string" ? raw.location_name.trim() || null : null,
           stops:
             Array.isArray(raw.stops) && raw.stops.length > 0
               ? (raw.stops as Array<Record<string, unknown>>).map((s, idx) => {
@@ -342,15 +385,7 @@ export const tripSubmissionSchema = z.preprocess(
                     notes: s.notes || null,
                   };
                 })
-              : [
-                  {
-                    sequence: 1,
-                    place_name: "จุดแวะเริ่มต้น",
-                    description: "จุดแวะแบบร่าง",
-                    latitude: 13.7563,
-                    longitude: 100.5018,
-                  },
-                ],
+              : [],
         };
       }
     }
@@ -408,15 +443,21 @@ export const tripSubmissionSchema = z.preprocess(
         .optional()
         .default(null),
       travel_mode_note: optionalNullableString,
-      status: z.enum(["draft", "pending_review"]).optional().default("pending_review"),
+      latitude: optionalLatitude.optional().default(null),
+      longitude: optionalLongitude.optional().default(null),
+      location_name: optionalNullableString.optional().default(null),
+      status: z.enum(["draft", "pending_review", "published"]).optional().default("published"),
+      moderation_note: optionalNullableString,
       stops: z
         .array(stopInputSchema)
-        .min(1, "At least 1 stop is required for an itinerary")
-        .max(25, "An itinerary can have at most 25 stops"),
+        .min(0)
+        .max(25, "An itinerary can have at most 25 stops")
+        .optional()
+        .default([]),
     })
     .refine(
       (data) => {
-        if (data.status === "pending_review") {
+        if (data.status === "pending_review" || data.status === "published") {
           if (data.title.trim().length < 3) return false;
           if (data.short_description.trim().length < 10) return false;
           if (data.description.trim().length < 20) return false;
@@ -425,7 +466,7 @@ export const tripSubmissionSchema = z.preprocess(
       },
       {
         message:
-          "When submitting for review, Title must be ≥ 3 chars, Short Description ≥ 10 chars, and Full Description ≥ 20 chars",
+          "When publishing, Title must be ≥ 3 chars, Short Description ≥ 10 chars, and Full Description ≥ 20 chars",
         path: ["title"],
       }
     )
@@ -443,7 +484,46 @@ export const tripSubmissionSchema = z.preprocess(
     )
 );
 
-// Phase 2: Moderation Action Schema
+// Admin Moderation & User Management Schemas
+export const adminUserActionSchema = z
+  .object({
+    action: z.enum(["ban", "unban", "warn", "clear_warn"]),
+    userId: z.string().trim().min(1, "User ID is required"),
+    reason: optionalNullableString,
+    message: optionalNullableString,
+  })
+  .refine(
+    (data) => {
+      if (data.action === "warn") {
+        return !!data.message && data.message.trim().length >= 2;
+      }
+      return true;
+    },
+    {
+      message: "A warning message of at least 2 characters is required",
+      path: ["message"],
+    }
+  );
+
+export const adminPostActionSchema = z
+  .object({
+    action: z.enum(["unpublish", "delete", "warn"]),
+    note: optionalNullableString,
+  })
+  .refine(
+    (data) => {
+      if (data.action === "unpublish") {
+        return !!data.note && data.note.trim().length >= 2;
+      }
+      return true;
+    },
+    {
+      message: "A moderation note of at least 2 characters is required when unpublishing",
+      path: ["note"],
+    }
+  );
+
+// Phase 2: Moderation Action Schema (backward compatibility)
 export const moderationActionSchema = z
   .object({
     action: z.enum(["approve", "reject"]),

@@ -2,20 +2,18 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Route,
   ShieldCheck,
   Globe,
   Sparkles,
-  Compass,
   Bookmark,
   User as UserIcon,
   LogIn,
   LogOut,
   FolderHeart,
   FilePlus,
-  CheckCircle2,
   ChevronDown,
 } from "lucide-react";
 import { useLanguage } from "@/components/LanguageProvider";
@@ -27,6 +25,7 @@ export function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -38,6 +37,11 @@ export function Navbar() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Hide consumer public navbar completely when in admin mode
+  if (pathname.startsWith("/admin")) {
+    return null;
+  }
 
   async function handleLogout() {
     setDropdownOpen(false);
@@ -79,28 +83,22 @@ export function Navbar() {
         </Link>
 
         <nav aria-label="Primary navigation" className="flex items-center gap-2 sm:gap-3">
-          <Link
-            href="/"
-            className="hidden items-center gap-1.5 rounded-full border-2 border-transparent bg-[var(--color-bg-card-photo)] px-3.5 py-1.5 text-xs font-extrabold text-[var(--color-brand-primary)] transition-all hover:border-[var(--color-accent-aqua)] hover:bg-[var(--color-bg-aqua-fade)] sm:inline-flex"
-          >
-            <Compass className="h-3.5 w-3.5 text-[var(--color-brand-primary)]" aria-hidden="true" />
-            {t.nav.explore}
-          </Link>
-
-          {/* Saved Trips link */}
-          <Link
-            href="/saved"
-            className="inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)] px-3.5 py-1.5 text-xs font-extrabold text-[var(--color-brand-deep)] transition-all hover:border-[var(--color-brand-primary)] hover:bg-[var(--color-bg-soft)]"
-            title={t.nav.savedTrips}
-          >
-            <Bookmark className="h-3.5 w-3.5 text-[var(--color-brand-primary)] fill-current" aria-hidden="true" />
-            <span className="hidden sm:inline">{t.nav.savedTrips}</span>
-            {savedTripIds.length > 0 && (
-              <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-brand-primary)] px-1 text-[10px] font-black text-white">
-                {savedTripIds.length}
-              </span>
-            )}
-          </Link>
+          {/* Saved Trips link - only when logged in */}
+          {user && (
+            <Link
+              href="/saved"
+              className="inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-card-photo)] px-3.5 py-1.5 text-xs font-extrabold text-[var(--color-brand-deep)] transition-all hover:border-[var(--color-brand-primary)] hover:bg-[var(--color-bg-soft)]"
+              title={t.nav.savedTrips}
+            >
+              <Bookmark className="h-3.5 w-3.5 text-[var(--color-brand-primary)] fill-current" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.nav.savedTrips}</span>
+              {savedTripIds.length > 0 && (
+                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-brand-primary)] px-1 text-[10px] font-black text-white">
+                  {savedTripIds.length}
+                </span>
+              )}
+            </Link>
+          )}
 
           {/* Community Submissions Link */}
           {user && (
@@ -113,14 +111,14 @@ export function Navbar() {
             </Link>
           )}
 
-          {/* Admin Moderation Queue quick link if admin */}
+          {/* Admin quick link - only when logged in as admin */}
           {user?.role === "admin" && (
             <Link
-              href="/admin/moderation"
+              href="/admin"
               className="hidden items-center gap-1.5 rounded-full border-2 border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-extrabold text-amber-900 transition-all hover:bg-amber-100 lg:inline-flex"
             >
-              <CheckCircle2 className="h-3.5 w-3.5 text-amber-700" aria-hidden="true" />
-              <span>{t.nav.moderation}</span>
+              <ShieldCheck className="h-3.5 w-3.5 text-amber-700" aria-hidden="true" />
+              <span>{t.nav.admin}</span>
             </Link>
           )}
 
@@ -231,24 +229,14 @@ export function Navbar() {
                     </Link>
 
                     {user.role === "admin" && (
-                      <>
-                        <Link
-                          href="/admin/moderation"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-50"
-                        >
-                          <CheckCircle2 className="h-4 w-4 text-amber-600" />
-                          {t.nav.moderation}
-                        </Link>
-                        <Link
-                          href="/admin"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-[var(--color-bg-soft)]"
-                        >
-                          <ShieldCheck className="h-4 w-4 text-[var(--color-brand-primary)]" />
-                          {t.nav.admin}
-                        </Link>
-                      </>
+                      <Link
+                        href="/admin"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-50"
+                      >
+                        <ShieldCheck className="h-4 w-4 text-amber-600" />
+                        {t.nav.admin}
+                      </Link>
                     )}
                   </div>
 

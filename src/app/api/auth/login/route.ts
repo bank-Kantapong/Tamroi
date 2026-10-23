@@ -68,6 +68,15 @@ export async function POST(request: Request) {
     }
 
     const profile = await repo.getProfile(user.id);
+    if (profile?.is_banned) {
+      return NextResponse.json(
+        {
+          error: `บัญชีของคุณถูกระงับการใช้งาน: ${profile.banned_reason || "ฝ่าฝืนกฎการใช้งานของชุมชน"}`,
+        },
+        { status: 403 }
+      );
+    }
+
     const adminConfig = getAdminConfig();
     const isConfiguredAdmin =
       adminConfig && email.toLowerCase() === adminConfig.email.toLowerCase();
@@ -80,6 +89,10 @@ export async function POST(request: Request) {
       display_name: profile?.display_name || user.email.split("@")[0],
       role: finalRole,
       avatar_url: profile?.avatar_url || null,
+      is_banned: false,
+      banned_reason: null,
+      warning_message: profile?.warning_message || null,
+      warning_count: profile?.warning_count || 0,
     };
 
     const token = createUserSessionToken(sessionUser);

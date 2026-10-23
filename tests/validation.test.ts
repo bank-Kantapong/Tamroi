@@ -86,5 +86,45 @@ describe("Server-side Zod validation schemas", () => {
     });
     expect(invalidLng.success).toBe(false);
   });
+
+  it("accepts optional header coordinates on trips and submissions", () => {
+    const singlePlaceTrip = tripInputSchema.safeParse({
+      title: "Shibainu Story Cafe Banthat Thong",
+      slug: "shibainu-story-cafe",
+      short_description: "A lovely dog cafe experience in the Banthat Thong neighborhood.",
+      description:
+        "Enjoy playing with adorable Shibas, great iced matcha latte, and tasty toast right on Banthat Thong road.",
+      province: "Bangkok",
+      category: "Cafe & Dessert",
+      duration_label: "2 Hours",
+      travel_mode: "walking",
+      status: "published",
+      latitude: "13.7437",
+      longitude: "100.5289",
+      location_name: "Shibainu Story Cafe",
+    });
+
+    expect(singlePlaceTrip.success).toBe(true);
+    if (singlePlaceTrip.success) {
+      expect(singlePlaceTrip.data.latitude).toBeCloseTo(13.7437);
+      expect(singlePlaceTrip.data.longitude).toBeCloseTo(100.5289);
+      expect(singlePlaceTrip.data.location_name).toBe("Shibainu Story Cafe");
+    }
+
+    const invalidHeaderLat = tripInputSchema.safeParse({
+      title: "Bad Lat Cafe",
+      slug: "bad-lat-cafe",
+      short_description: "Valid description for testing invalid latitude.",
+      description: "Valid description with enough characters for validation.",
+      province: "Bangkok",
+      category: "Cafe",
+      duration_label: "1 Hour",
+      travel_mode: "walking",
+      status: "published",
+      latitude: 95.0,
+      longitude: 100.5,
+    });
+    expect(invalidHeaderLat.success).toBe(false);
+  });
 });
 

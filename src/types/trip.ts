@@ -9,6 +9,10 @@ export interface Profile {
   display_name: string;
   avatar_url: string | null;
   role: UserRole;
+  is_banned?: boolean;
+  banned_reason?: string | null;
+  warning_message?: string | null;
+  warning_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +39,24 @@ export interface SessionUser {
   display_name: string;
   role: UserRole;
   avatar_url: string | null;
+  is_banned?: boolean;
+  banned_reason?: string | null;
+  warning_message?: string | null;
+  warning_count?: number;
+}
+
+export interface AdminUserListItem {
+  id: string;
+  email: string;
+  display_name: string;
+  avatar_url: string | null;
+  role: UserRole;
+  is_banned: boolean;
+  banned_reason: string | null;
+  warning_message: string | null;
+  warning_count: number;
+  post_count: number;
+  created_at: string;
 }
 
 export interface TripStop {
@@ -69,9 +91,13 @@ export interface Trip {
   budget_max: number | null;
   travel_mode: TravelMode;
   travel_mode_note?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_name?: string | null;
   status: TripStatus;
   is_sample: boolean;
   created_by?: string | null;
+  moderation_note?: string | null;
   rejection_reason?: string | null;
   submitted_at?: string | null;
   reviewed_at?: string | null;
@@ -110,9 +136,13 @@ export interface CreateOrUpdateTripInput {
   budget_max?: number | null;
   travel_mode?: TravelMode;
   travel_mode_note?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_name?: string | null;
   status: TripStatus;
   is_sample?: boolean;
   created_by?: string | null;
+  moderation_note?: string | null;
   rejection_reason?: string | null;
   submitted_at?: string | null;
   reviewed_at?: string | null;
@@ -133,7 +163,11 @@ export interface TripSubmissionInput {
   budget_max?: number | null;
   travel_mode?: TravelMode;
   travel_mode_note?: string | null;
-  status?: "draft" | "pending_review";
+  latitude?: number | null;
+  longitude?: number | null;
+  location_name?: string | null;
+  status?: "draft" | "pending_review" | "published";
+  moderation_note?: string | null;
   stops: CreateOrUpdateStopInput[];
 }
 

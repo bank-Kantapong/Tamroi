@@ -1,13 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Lock, AlertCircle, Sparkles } from "lucide-react";
+import { ShieldCheck, Lock, AlertCircle, ArrowLeft, KeyRound } from "lucide-react";
 import { useFormValidityBridge } from "@/components/FormValidityBridge";
 import { useLanguage } from "@/components/LanguageProvider";
-
-const inputClass =
-  "mt-1.5 flex h-11 w-full rounded-2xl border-2 border-[var(--color-border-subtle)] bg-[var(--color-bg-soft)] px-3.5 py-2 text-sm font-bold text-[var(--color-brand-deep)] shadow-[0_3px_0_rgba(9,124,135,0.08)] transition-colors placeholder:font-medium placeholder:text-slate-400 hover:border-[var(--color-accent-aqua)] focus:border-[var(--color-brand-primary)] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[var(--color-accent-aqua)]/20";
 
 export function AdminLoginForm({
   isUsingDevDefaults,
@@ -42,7 +40,7 @@ export function AdminLoginForm({
 
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error || "Invalid credentials.");
+        setError(data.error || "อีเมลหรือรหัสผ่านไม่ถูกต้อง (Invalid credentials)");
         setLoading(false);
         return;
       }
@@ -50,64 +48,73 @@ export function AdminLoginForm({
       router.push("/admin");
       router.refresh();
     } catch {
-      setError("Network error while signing in. Please try again.");
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
       setLoading(false);
     }
   }
 
-  return (
-    <div className="cute-card animate-fade-up relative p-6 sm:p-8">
-      {/* Cute Top Sticker */}
-      <span
-        className="pointer-events-none absolute -top-3.5 right-6 inline-flex -rotate-2 items-center gap-1 rounded-full border-2 border-white bg-[var(--color-sun-yellow-light)] px-3 py-1 text-[11px] font-extrabold text-[var(--color-sun-text)] shadow-md"
-        aria-hidden="true"
-      >
-        <Sparkles className="h-3 w-3 text-[var(--color-sun-amber)]" />
-        ADMIN ONLY ♡
-      </span>
+  function fillDevCredentials() {
+    setEmail("admin@tamroi.local");
+    setPassword("tamroi-dev-admin-2026");
+  }
 
-      <div className="flex items-center gap-3.5">
-        <span className="flex h-12 w-12 -rotate-3 items-center justify-center rounded-2xl border-2 border-[var(--color-border-subtle)] bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-accent-aqua)] text-white shadow-[0_4px_0_rgba(9,124,135,0.25)]">
-          <ShieldCheck className="h-6 w-6 text-[var(--color-sun-yellow-light)]" aria-hidden="true" />
-        </span>
-        <div>
-          <h1 className="font-heading text-xl font-black text-[var(--color-brand-deep)]">
-            {t.admin.loginTitle}
-          </h1>
-          <p className="text-xs font-medium text-slate-500">
-            {t.admin.loginSubtitle}
-          </p>
+  return (
+    <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl text-slate-100">
+      {/* Admin Branding Header */}
+      <div className="flex flex-col items-center text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-teal-600 to-emerald-500 shadow-lg shadow-teal-950/60 text-white mb-4">
+          <ShieldCheck className="h-8 w-8 text-white" />
         </div>
+        <div className="flex items-center gap-2">
+          <span className="font-heading text-xl font-black tracking-wide text-white">TAMROI ADMIN</span>
+          <span className="rounded-md bg-teal-500/20 border border-teal-500/30 px-2 py-0.5 text-[10px] font-black uppercase text-teal-300">
+            Console
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-slate-400 font-medium">
+          ระบบจัดการหลังบ้านเฉพาะผู้ดูแลระบบ (Back-Office Access Only)
+        </p>
       </div>
 
       {isUsingDevDefaults && (
-        <div className="mt-5 rounded-2xl border-2 border-[var(--color-sun-yellow)] bg-[var(--color-sun-cream)] p-4 text-xs text-[var(--color-sun-text)] shadow-sm">
-          <p className="font-extrabold text-[var(--color-brand-deep)]">{t.admin.devModeTitle}</p>
-          <p className="mt-0.5 font-medium">{t.admin.devModeDesc}</p>
-          <ul className="mt-1.5 list-inside list-disc font-mono text-[11px] font-bold">
-            <li>Email: admin@tamroi.local</li>
-            <li>Password: tamroi-dev-admin-2026</li>
-          </ul>
+        <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
+          <div className="flex items-center justify-between">
+            <span className="font-bold flex items-center gap-1.5 text-amber-300">
+              <KeyRound className="h-3.5 w-3.5" />
+              โหมดทดสอบในเครื่อง (Dev Defaults)
+            </span>
+            <button
+              type="button"
+              onClick={fillDevCredentials}
+              className="text-[11px] underline hover:text-white font-semibold"
+            >
+              กรอกอัตโนมัติ
+            </button>
+          </div>
+          <div className="mt-2 font-mono text-[11px] space-y-0.5 text-slate-300">
+            <div>Email: <strong className="text-amber-100">admin@tamroi.local</strong></div>
+            <div>Password: <strong className="text-amber-100">tamroi-dev-admin-2026</strong></div>
+          </div>
         </div>
       )}
 
       {error && (
         <div
           role="alert"
-          className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[var(--color-coral-border-alt)] bg-[var(--color-coral-bg-alt)] p-3.5 text-xs font-extrabold text-[var(--color-coral-text-dark)]"
+          className="mt-5 flex items-center gap-2.5 rounded-2xl border border-rose-500/30 bg-rose-500/15 p-3.5 text-xs font-semibold text-rose-300"
         >
-          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
           <span>{error}</span>
         </div>
       )}
 
-      <form ref={formRef} onSubmit={handleSubmit} className="mt-5 space-y-4">
+      <form ref={formRef} onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
           <label
             htmlFor="admin-email"
-            className="block text-xs font-extrabold text-[var(--color-brand-deep)]"
+            className="block text-xs font-bold text-slate-300 mb-1.5"
           >
-            {t.admin.emailLabel} <span className="text-red-600">*</span>
+            {t.admin.emailLabel} <span className="text-rose-400">*</span>
           </label>
           <input
             id="admin-email"
@@ -115,23 +122,19 @@ export function AdminLoginForm({
             type="email"
             required
             autoComplete="username"
-            aria-errormessage="admin-email-err"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="admin@tamroi.local"
-            className={inputClass}
+            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs font-medium text-white placeholder-slate-500 transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           />
-          <div id="admin-email-err" className="field-error-msg">
-            <span aria-hidden="true">❌</span> กรุณากรอกอีเมลให้ถูกต้อง (Valid email required)
-          </div>
         </div>
 
         <div>
           <label
             htmlFor="admin-password"
-            className="block text-xs font-extrabold text-[var(--color-brand-deep)]"
+            className="block text-xs font-bold text-slate-300 mb-1.5"
           >
-            {t.admin.passwordLabel} <span className="text-red-600">*</span>
+            {t.admin.passwordLabel} <span className="text-rose-400">*</span>
           </label>
           <input
             id="admin-password"
@@ -139,26 +142,32 @@ export function AdminLoginForm({
             type="password"
             required
             autoComplete="current-password"
-            aria-errormessage="admin-password-err"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••••••"
-            className={inputClass}
+            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs font-medium text-white placeholder-slate-500 transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           />
-          <div id="admin-password-err" className="field-error-msg">
-            <span aria-hidden="true">❌</span> กรุณากรอกรหัสผ่าน (Password required)
-          </div>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="cute-aqua-btn inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-extrabold disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold py-3 text-xs shadow-lg shadow-teal-950/50 transition active:scale-[0.98] disabled:opacity-50 mt-2"
         >
-          <Lock className="h-4 w-4 text-[var(--color-sun-yellow-light)]" aria-hidden="true" />
-          <span>{loading ? t.admin.signingInBtn : t.admin.signInBtn}</span>
+          <Lock className="h-4 w-4" />
+          <span>{loading ? "กำลังตรวจสอบข้อมูล..." : "เข้าสู่ระบบหลังบ้าน (Sign In)"}</span>
         </button>
       </form>
+
+      <div className="mt-6 border-t border-slate-800 pt-5 text-center">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-teal-400 transition"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>กลับไปยังหน้าหลักของเว็บไซต์ (Back to Website)</span>
+        </Link>
+      </div>
     </div>
   );
 }
